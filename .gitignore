@@ -1,0 +1,31 @@
+# Nix build artifacts
+result
+result-*
+
+# Nix evaluation artifacts
+.direnv/
+
+# Secrets (encrypted files are OK, but not unencrypted)
+secrets/*.key
+secrets/*.age
+!secrets/.sops.yaml
+!secrets/secrets.yaml
+
+# Editor files
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# VM test artifacts
+*.qcow2
