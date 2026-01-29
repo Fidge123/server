@@ -92,10 +92,26 @@
           phase-1-flake = pkgs.nixosTest {
             name = "phase-1-basic-flake";
 
-            nodes.server = { config, pkgs, ... }: {
+            nodes.server = { config, pkgs, lib, modulesPath, ... }: {
               imports = [ 
-                self.nixosConfigurations.server-vm.config
+                ./hosts/server/configuration.nix
+                self.nixosModules.common
               ];
+              
+              # VM-specific overrides for testing
+              boot.loader.grub.enable = false;
+              fileSystems."/" = {
+                device = "/dev/disk/by-label/nixos";
+                fsType = "ext4";
+              };
+              
+              # Test user with passwordless sudo
+              security.sudo.wheelNeedsPassword = false;
+              users.users.test = {
+                isNormalUser = true;
+                extraGroups = [ "wheel" ];
+                initialPassword = "test";
+              };
             };
 
             testScript = ''
