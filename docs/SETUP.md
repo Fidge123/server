@@ -2,16 +2,6 @@
 
 This guide covers installing NixOS on a remote server (Hetzner) and on a local VM for testing.
 
-## Table of Contents
-
-- [Prerequisites](#prerequisites)
-- [Local VM Installation](#local-vm-installation)
-- [Remote Server Installation (Hetzner)](#remote-server-installation-hetzner)
-- [Post-Installation](#post-installation)
-- [Troubleshooting](#troubleshooting)
-
----
-
 ## Prerequisites
 
 ### Local Machine Requirements
@@ -47,8 +37,6 @@ nix develop
 # - ssh
 # - age (for secrets, Phase 2)
 ```
-
----
 
 ## Local VM Installation
 
@@ -119,8 +107,6 @@ nix build .#checks.x86_64-linux.phase-1-flake -L
 # - Verify SSH and firewall are running
 # - Report success/failure
 ```
-
----
 
 ## Remote Server Installation (Hetzner)
 
@@ -241,8 +227,6 @@ systemctl is-system-running
 # Should show: running
 ```
 
----
-
 ### Method 2: Hetzner installimage + nixos-infect
 
 Alternative method using Hetzner's rescue system:
@@ -296,8 +280,6 @@ nixos-generate-config --show-hardware-config > hosts/server/hardware.nix
 nixos-rebuild switch --flake .#server
 ```
 
----
-
 ### Method 3: Native NixOS Installation
 
 Hetzner supports native NixOS images:
@@ -324,8 +306,6 @@ nixos-generate-config --show-hardware-config > hosts/server/hardware.nix
 # Apply configuration
 nixos-rebuild switch --flake .#server
 ```
-
----
 
 ## Post-Installation
 
@@ -372,8 +352,6 @@ ss -tlnp
 # Check firewall rules
 iptables -L -n
 ```
-
----
 
 ## Troubleshooting
 
@@ -441,8 +419,6 @@ nix repl
 :lf .
 nixosConfigurations.server.config.services.openssh.enable
 ```
-
----
 
 ## Next Steps
 

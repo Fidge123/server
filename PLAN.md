@@ -10,8 +10,6 @@ This plan implements the NixOS-based self-hosted infrastructure as defined in [A
 - Configuration is fully declarative and reproducible
 - All changes are committed to Git before validation
 
----
-
 ## Progress Summary
 
 | Phase | Description | Status |
@@ -23,8 +21,6 @@ This plan implements the NixOS-based self-hosted infrastructure as defined in [A
 | 5 | Restic Backup | ⏳ Not Started |
 | 6 | Documentation | 🔄 Partial (SETUP.md done) |
 | 7 | GitHub Actions | 🔄 Partial (validate.yml done) |
-
----
 
 ## Phase 1: NixOS Flake Structure ✅
 
@@ -70,8 +66,6 @@ nix --extra-experimental-features 'nix-command flakes' eval .#nixosConfiguration
 nix build .#checks.x86_64-linux.phase-1-flake -L
 ```
 
----
-
 ## Phase 2: Secrets Management with sops-nix
 
 **Status:** Not Started
@@ -96,8 +90,6 @@ sops -d secrets/secrets.yaml
 nix build .#checks.x86_64-linux.phase-2-secrets -L
 ```
 
----
-
 ## Phase 3: Remote Deployment with deploy-rs
 
 **Status:** Not Started
@@ -119,8 +111,6 @@ nix flake check
 # Dry-run deployment
 deploy --dry-activate .#server
 ```
-
----
 
 ## Phase 4: PostgreSQL with pgBackRest
 
@@ -146,8 +136,6 @@ nix build .#checks.x86_64-linux.phase-4-postgres -L
 sudo -u postgres pgbackrest check
 sudo -u postgres pgbackrest backup --type=full
 ```
-
----
 
 ## Phase 5: Restic Backup with Optional Destinations
 
@@ -200,8 +188,6 @@ nix build .#checks.x86_64-linux.phase-5-restic-local -L
 restic -r /var/backup/restic snapshots
 ```
 
----
-
 ## Phase 6: Documentation
 
 **Status:** Partial
@@ -215,8 +201,6 @@ restic -r /var/backup/restic snapshots
 - [ ] **6.5** Document optional destination setup
 - [x] **6.6** Create troubleshooting guide (in SETUP.md)
 - [x] **6.7** Update README.md
-
----
 
 ## Phase 7: GitHub Actions for GitOps
 
@@ -242,8 +226,6 @@ Push/PR → Flake Check → Build Config → Run VM Tests
 ```
 (Future) Merge to main → Deploy to server
 ```
-
----
 
 ## Timeline
 

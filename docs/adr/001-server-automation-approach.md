@@ -88,8 +88,6 @@ We need to establish an automated, documented approach for deploying and managin
 
 **Additional Costs**: None
 
----
-
 ### Option 2: Uncloud
 
 **Overview**: Uncloud is a lightweight container orchestration tool that creates a WireGuard mesh network between Docker hosts. It uses familiar Docker Compose syntax and provides automatic HTTPS, service discovery, and load balancing without a central control plane.
@@ -131,8 +129,6 @@ We need to establish an automated, documented approach for deploying and managin
 **Resource Overhead**: Low (~100MB for Uncloud daemon + Caddy)
 
 **Additional Costs**: None (managed DNS `*.uncld.dev` is free)
-
----
 
 ### Option 3: Docker Compose with Ansible
 
@@ -176,8 +172,6 @@ We need to establish an automated, documented approach for deploying and managin
 
 **Additional Costs**: None (unless using Ansible AWX/Tower)
 
----
-
 ### Option 4: Docker Compose with cloud-init
 
 **Overview**: Minimal approach using cloud-init for initial server provisioning and Docker Compose for services. Cloud-init is supported by most VPS providers for first-boot configuration.
@@ -219,8 +213,6 @@ We need to establish an automated, documented approach for deploying and managin
 
 **Additional Costs**: None
 
----
-
 ### Option 5: Kamal
 
 **Overview**: Kamal is a deployment tool from 37signals (creators of Basecamp, HEY) that deploys containerized applications to any server via SSH. Uses an imperative approach with kamal-proxy for zero-downtime deployments.
@@ -261,8 +253,6 @@ We need to establish an automated, documented approach for deploying and managin
 **Resource Overhead**: Low (Docker + kamal-proxy ~50MB)
 
 **Additional Costs**: None
-
----
 
 ### Option 6: CapRover
 
@@ -306,8 +296,6 @@ We need to establish an automated, documented approach for deploying and managin
 **Resource Overhead**: Medium (~300MB RAM for CapRover + nginx + Docker Swarm)
 
 **Additional Costs**: None
-
----
 
 ## Comparison Matrix
 

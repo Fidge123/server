@@ -56,8 +56,6 @@ pkgs.nixosTest {
 - ❌ Resource intensive (RAM, CPU)
 - ❌ QEMU required (works on Linux, challenging on macOS)
 
----
-
 ### Option 2: nixos-rebuild build-vm
 
 **Overview**: Build a VM image from the configuration and run it interactively.
@@ -77,8 +75,6 @@ nixos-rebuild build-vm --flake .#server
 - ❌ Manual validation (not automated)
 - ❌ Not suitable for CI
 - ❌ No programmatic assertions
-
----
 
 ### Option 3: microvm.nix
 
@@ -105,8 +101,6 @@ nixos-rebuild build-vm --flake .#server
 - ❌ Less mature than standard VM tests
 - ❌ Some features may not work (GPU, etc.)
 
----
-
 ### Option 4: Container-based Testing
 
 **Overview**: Use NixOS containers or systemd-nspawn for testing.
@@ -119,8 +113,6 @@ nixos-rebuild build-vm --flake .#server
 - ❌ Not full system testing (shared kernel)
 - ❌ Some services behave differently in containers
 - ❌ Not representative of production
-
----
 
 ## Comparison Matrix
 

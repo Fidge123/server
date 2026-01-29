@@ -57,8 +57,6 @@ nix run github:nix-community/nixos-anywhere -- \
 
 **Best for**: Fresh server installations with known disk layout
 
----
-
 ### Option 2: nixos-infect
 
 **Overview**: [nixos-infect](https://github.com/elitak/nixos-infect) is a script that converts an existing Linux installation to NixOS in-place. It replaces the root filesystem contents while preserving the disk layout.
@@ -92,8 +90,6 @@ curl https://raw.githubusercontent.com/elitak/nixos-infect/master/nixos-infect |
 
 **Best for**: Quick conversions when disk layout doesn't matter
 
----
-
 ### Option 3: Native NixOS Installation
 
 **Overview**: Some providers (including Hetzner) offer NixOS as a directly installable image. This uses the standard NixOS installer, either via ISO mount or provider-specific image.
@@ -122,8 +118,6 @@ curl https://raw.githubusercontent.com/elitak/nixos-infect/master/nixos-infect |
 - ❌ **Outdated images**: Provider images may lag behind nixpkgs
 
 **Best for**: When other methods fail, or for learning NixOS installation
-
----
 
 ## Comparison Matrix
 
