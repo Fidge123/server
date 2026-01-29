@@ -59,7 +59,15 @@ Open-Source services:
 
 ## Quick Start
 
-> **Note:** Implementation not yet started. See [PLAN.md](PLAN.md) for status.
+### Prerequisites
+
+Install Nix with flakes support:
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install
+```
+
+### Validate Configuration
 
 ```bash
 # Clone this repository
@@ -69,10 +77,30 @@ cd self-hosted
 # Validate the NixOS configuration
 nix flake check
 
-# Run VM tests
-nix build .#checks.x86_64-linux --print-build-logs
+# Run VM tests (Linux only)
+nix build .#checks.x86_64-linux.phase-1-flake -L
+```
 
-# Deploy to server (after initial setup)
+### Test in Local VM
+
+```bash
+# Build and run a test VM
+nix build .#nixosConfigurations.server-vm.config.system.build.vm
+./result/bin/run-server-vm
+
+# SSH into the VM
+ssh -p 2222 test@localhost  # password: test
+```
+
+### Deploy to Production
+
+See [docs/SETUP.md](docs/SETUP.md) for full installation instructions on:
+- Local VM testing
+- Hetzner Cloud servers
+- Other VPS providers
+
+```bash
+# After initial server setup (Phase 3)
 deploy .#server
 ```
 

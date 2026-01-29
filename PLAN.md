@@ -21,8 +21,8 @@ This plan implements the NixOS-based self-hosted infrastructure as defined in [A
 | 3 | Deployment (deploy-rs) | ⏳ Not Started |
 | 4 | PostgreSQL + pgBackRest | ⏳ Not Started |
 | 5 | Restic Backup | ⏳ Not Started |
-| 6 | Documentation | ⏳ Not Started |
-| 7 | GitHub Actions | ⏳ Not Started |
+| 6 | Documentation | 🔄 Partial (SETUP.md done) |
+| 7 | GitHub Actions | 🔄 Partial (validate.yml done) |
 
 ---
 
@@ -204,37 +204,43 @@ restic -r /var/backup/restic snapshots
 
 ## Phase 6: Documentation
 
-**Status:** Not Started
+**Status:** Partial
 
 ### Tasks
 
-- [ ] **6.1** Write initial server installation guide
+- [x] **6.1** Write initial server installation guide (`docs/SETUP.md`)
 - [ ] **6.2** Document secrets setup and key management
 - [ ] **6.3** Document deployment process
 - [ ] **6.4** Document backup configuration
 - [ ] **6.5** Document optional destination setup
-- [ ] **6.6** Create troubleshooting guide
-- [ ] **6.7** Update README.md
+- [x] **6.6** Create troubleshooting guide (in SETUP.md)
+- [x] **6.7** Update README.md
 
 ---
 
 ## Phase 7: GitHub Actions for GitOps
 
-**Status:** Not Started
+**Status:** Partial
 
 ### Tasks
 
-- [ ] **7.1** Create validation workflow
-- [ ] **7.2** Create VM test workflow
+- [x] **7.1** Create validation workflow (`.github/workflows/validate.yml`)
+- [x] **7.2** Create VM test workflow (included in validate.yml)
 - [ ] **7.3** Create deployment workflow
 - [ ] **7.4** Set up Cachix for build caching
 - [ ] **7.5** Configure deployment secrets
 - [ ] **7.6** Add deployment protection rules
 
-### Workflow Design
+### Current Workflow
 
 ```
-Push → Validate Flake → Run VM Tests → Deploy (main only)
+Push/PR → Flake Check → Build Config → Run VM Tests
+```
+
+### Remaining Work
+
+```
+(Future) Merge to main → Deploy to server
 ```
 
 ---
