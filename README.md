@@ -122,9 +122,33 @@ See [docs/SETUP.md](docs/SETUP.md) for full installation instructions on:
 - Hetzner Cloud servers (x86_64 and ARM Ampere)
 - Other VPS providers
 
+#### Initial Installation (nixos-anywhere)
+
 ```bash
-# After initial server setup (Phase 3)
-deploy .#server
+# Install NixOS on a fresh x86_64 server
+nix run github:nix-community/nixos-anywhere -- \
+  --flake .#server-x86 \
+  root@YOUR_SERVER_IP
+
+# Install NixOS on a fresh ARM server
+nix run github:nix-community/nixos-anywhere -- \
+  --flake .#server-arm \
+  root@YOUR_SERVER_IP
+```
+
+#### Ongoing Deployments (deploy-rs)
+
+```bash
+# Deploy configuration updates
+./scripts/deploy.sh server-x86
+./scripts/deploy.sh server-arm
+
+# Dry-run (check without applying)
+./scripts/deploy.sh server-x86 --dry-run
+
+# Or using deploy-rs directly
+nix develop
+deploy .#server-x86
 ```
 
 ## Backup Strategy

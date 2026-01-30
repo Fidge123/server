@@ -17,7 +17,7 @@ This plan implements the NixOS-based self-hosted infrastructure as defined in [A
 | 1 | NixOS Flake Structure | ✅ Complete |
 | 2 | Secrets (sops-nix) | ✅ Complete |
 | 2.5 | Multi-Architecture Support (x86_64 + aarch64) | ✅ Complete |
-| 3 | Deployment (deploy-rs) | ⏳ Not Started |
+| 3 | Deployment (deploy-rs + disko) | ✅ Complete |
 | 4 | PostgreSQL + pgBackRest | ⏳ Not Started |
 | 5 | Restic Backup | ⏳ Not Started |
 | 6 | Documentation | 🔄 Partial (SETUP.md updated) |
@@ -168,26 +168,92 @@ nix build .#checks.aarch64-linux.phase-2-secrets -L
 nix build .#checks.x86_64-linux.phase-1-flake -L
 ```
 
-## Phase 3: Remote Deployment with deploy-rs
+## Phase 3: Deployment with deploy-rs and disko
 
-**Status:** Not Started
+**Status:** ✅ Complete (January 30, 2026)
 
-### Tasks
+### Overview
 
-- [ ] **3.1** Add deploy-rs to flake inputs
-- [ ] **3.2** Configure deploy-rs in flake.nix
-- [ ] **3.3** Create deployment profile for server
-- [ ] **3.4** Create `scripts/deploy.sh` helper script
-- [ ] **3.5** Document deployment process
+This phase implements:
+1. **disko** - Declarative disk partitioning for reproducible server installations
+2. **deploy-rs** - Remote deployment tool for ongoing configuration updates
+
+### Completed Tasks
+
+- [x] **3.1** Add deploy-rs and disko to flake inputs
+- [x] **3.2** Create `hosts/server-x86/disk-config.nix` for x86_64 servers
+- [x] **3.3** Create `hosts/server-arm/disk-config.nix` for ARM servers
+- [x] **3.4** Update host configurations to import disko module
+- [x] **3.5** Configure deploy-rs nodes in flake.nix (server-x86, server-arm)
+- [x] **3.6** Create `scripts/deploy.sh` helper script
+- [x] **3.7** Create Phase 3 VM test for deploy-rs validation
+- [x] **3.8** Update documentation (SETUP.md, README.md)
+
+### Files Created/Modified
+
+```
+├── flake.nix                         # Add deploy-rs, disko inputs + deploy config
+├── hosts/
+│   ├── server-x86/
+│   │   ├── configuration.nix         # Import disko
+│   │   └── disk-config.nix           # NEW: x86_64 disk layout
+│   └── server-arm/
+│       ├── configuration.nix         # Import disko
+│       └── disk-config.nix           # NEW: ARM disk layout
+├── scripts/
+│   └── deploy.sh                     # NEW: Deployment helper
+└── docs/
+    └── SETUP.md                      # Updated with deployment docs
+```
+
+### Initial Installation (nixos-anywhere)
+
+Use nixos-anywhere for the first-time installation of NixOS on a fresh server:
+
+```bash
+# Install on x86_64 server (Hetzner CX/CPX)
+nix run github:nix-community/nixos-anywhere -- \
+  --flake .#server-x86 \
+  root@YOUR_SERVER_IP
+
+# Install on ARM server (Hetzner CAX)
+nix run github:nix-community/nixos-anywhere -- \
+  --flake .#server-arm \
+  root@YOUR_SERVER_IP
+```
+
+### Ongoing Deployment (deploy-rs)
+
+After initial installation, use deploy-rs for configuration updates:
+
+```bash
+# Deploy to x86_64 server
+deploy .#server-x86
+
+# Deploy to ARM server
+deploy .#server-arm
+
+# Dry-run (check without applying)
+deploy --dry-activate .#server-x86
+
+# Using helper script
+./scripts/deploy.sh server-x86
+./scripts/deploy.sh server-arm --dry-run
+```
 
 ### Validation
 
 ```bash
-# Check deployment configuration
+# Check flake and deploy-rs configuration
 nix flake check
 
-# Dry-run deployment
-deploy --dry-activate .#server
+# Run Phase 3 VM test
+nix build .#checks.x86_64-linux.phase-3-deploy -L
+nix build .#checks.aarch64-linux.phase-3-deploy -L
+
+# Verify deploy-rs configuration evaluates
+nix eval .#deploy.nodes.server-x86.hostname
+nix eval .#deploy.nodes.server-arm.hostname
 ```
 
 ## Phase 4: PostgreSQL with pgBackRest

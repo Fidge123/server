@@ -8,9 +8,13 @@
     sops-nix.url = "github:Mic92/sops-nix";
     sops-nix.inputs.nixpkgs.follows = "nixpkgs";
     
-    # For future phases
-    # deploy-rs.url = "github:serokell/deploy-rs";
-    # deploy-rs.inputs.nixpkgs.follows = "nixpkgs";
+    # Deployment
+    deploy-rs.url = "github:serokell/deploy-rs";
+    deploy-rs.inputs.nixpkgs.follows = "nixpkgs";
+    
+    # Declarative disk partitioning
+    disko.url = "github:nix-community/disko";
+    disko.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = { self, nixpkgs, ... }@inputs:
@@ -111,164 +115,6 @@
         common = import ./modules/common.nix;
       };
 
-      # Checks (including VM tests)
-      checks = forAllSystems (system:
-        let
-          pkgs = nixpkgsFor.${system};
-          
-          # Determine if this is a Linux system that can run VM tests
-          isLinux = builtins.elem system [ "x86_64-linux" "aarch64-linux" ];
-          
-          # Common test node configuration that includes sops-nix
-          mkTestNode = { extraConfig ? {} }: { config, pkgs, lib, modulesPath, ... }: {
-            imports = [ 
-              inputs.sops-nix.nixosModules.sops
-              ./modules/common.nix
-            ];
-            
-            # Basic server configuration (subset of modules/server-common.nix)
-            networking.hostName = "server";
-            time.timeZone = "Europe/Berlin";
-            
-            environment.systemPackages = with pkgs; [ vim git ];
-            
-            services.openssh = {
-              enable = true;
-              settings.PasswordAuthentication = false;
-            };
-            
-            networking.firewall = {
-              enable = true;
-              allowedTCPPorts = [ 22 ];
-            };
-            
-            nix.settings.experimental-features = [ "nix-command" "flakes" ];
-            system.stateVersion = "24.11";
-            
-            # VM-specific overrides for testing
-            boot.loader.grub.enable = false;
-            fileSystems."/" = {
-              device = "/dev/disk/by-label/nixos";
-              fsType = "ext4";
-            };
-            
-            # Test user with passwordless sudo
-            security.sudo.wheelNeedsPassword = false;
-            users.users.test = {
-              isNormalUser = true;
-              extraGroups = [ "wheel" ];
-              initialPassword = "test";
-            };
-          } // extraConfig;
-          
-          # Test definitions that can run on any Linux
-          vmTests = let
-            testKeyFile = pkgs.writeText "test-age-key" (builtins.readFile ./keys/test.age);
-          in {
-            # Phase 1: Basic flake test
-            phase-1-flake = pkgs.nixosTest {
-              name = "phase-1-basic-flake-${system}";
-
-              nodes.server = mkTestNode {
-                extraConfig = {
-                  # Provision test key for sops-nix  
-                  sops.defaultSopsFile = ./secrets/test.yaml;
-                  sops.age.keyFile = "/var/lib/sops-nix/key.txt";
-                  sops.age.generateKey = false;
-                  
-                  # Define a dummy secret so setupSecrets script exists
-                  sops.secrets.test_secret = {};
-                  
-                  # Provision the test key file before sops-nix runs
-                  system.activationScripts.sops-install-key = {
-                    text = ''
-                      mkdir -p /var/lib/sops-nix
-                      chmod 700 /var/lib/sops-nix
-                      cp ${testKeyFile} /var/lib/sops-nix/key.txt
-                      chmod 600 /var/lib/sops-nix/key.txt
-                    '';
-                    deps = [ "specialfs" ];
-                  };
-                  
-                  # Make setupSecrets depend on our key installation
-                  system.activationScripts.setupSecrets.deps = [ "sops-install-key" ];
-                };
-              };
-
-              testScript = ''
-                server.start()
-                server.wait_for_unit("multi-user.target")
-                
-                # Verify basic system functionality
-                server.succeed("nixos-version")
-                server.succeed("systemctl is-system-running --wait || true")
-                
-                # Verify SSH is running
-                server.wait_for_unit("sshd.service")
-                server.succeed("systemctl is-active sshd")
-                
-                # Verify firewall is enabled
-                server.succeed("systemctl is-active firewall")
-                
-                print("✅ Phase 1 validation passed on ${system}!")
-              '';
-            };
-            
-            # Phase 2: Secrets management with sops-nix
-            phase-2-secrets = pkgs.nixosTest {
-              name = "phase-2-secrets-${system}";
-
-              nodes.server = mkTestNode {
-                extraConfig = {
-                  # Use test secrets and test key
-                  sops.defaultSopsFile = ./secrets/test.yaml;
-                  sops.age.keyFile = "/var/lib/sops-nix/key.txt";
-                  sops.age.generateKey = false;
-                  
-                  sops.secrets.test_secret = {};
-                  
-                  # Provision the test key file before sops-nix runs
-                  system.activationScripts.sops-install-key = {
-                    text = ''
-                      mkdir -p /var/lib/sops-nix
-                      chmod 700 /var/lib/sops-nix
-                      cp ${testKeyFile} /var/lib/sops-nix/key.txt
-                      chmod 600 /var/lib/sops-nix/key.txt
-                    '';
-                    deps = [ "specialfs" ];
-                  };
-                  
-                  # Make setupSecrets depend on our key installation
-                  system.activationScripts.setupSecrets.deps = [ "sops-install-key" ];
-                };
-              };
-
-              testScript = ''
-                server.start()
-                server.wait_for_unit("multi-user.target")
-                
-                # Verify the test secret was decrypted
-                server.succeed("test -f /run/secrets/test_secret")
-                output = server.succeed("cat /run/secrets/test_secret")
-                assert "this-is-a-test-secret-value" in output, f"Secret value mismatch: {output}"
-                
-                # Verify secret file permissions (should be readable only by root)
-                server.succeed("stat -c '%a' /run/secrets/test_secret | grep -E '^400$|^600$'")
-                
-                print("✅ Phase 2 validation passed on ${system}: secrets decrypted successfully!")
-              '';
-            };
-          };
-        in
-        {
-          # Basic flake evaluation check (works on all systems including macOS)
-          flake-check = pkgs.runCommand "flake-check" {} ''
-            echo "Flake evaluation successful on ${system}"
-            touch $out
-          '';
-        } // (if isLinux then vmTests else {})
-      );
-
       # Development shells
       devShells = forAllSystems (system:
         let
@@ -281,7 +127,8 @@
               nil  # Nix LSP
               sops
               age
-              # Future: deploy-rs
+            ] ++ [
+              inputs.deploy-rs.packages.${system}.deploy-rs
             ];
             
             # Set up sops to use the test key by default
@@ -294,5 +141,200 @@
 
       # Formatter
       formatter = forAllSystems (system: nixpkgsFor.${system}.nixpkgs-fmt);
+
+      # deploy-rs configuration
+      deploy = {
+        # Don't use sudo, we deploy as root
+        sshUser = "root";
+        
+        # Deployment nodes
+        nodes = {
+          # x86_64 server deployment
+          server-x86 = {
+            hostname = "server-x86.example.com";  # TODO: Set actual hostname/IP
+            profiles.system = {
+              user = "root";
+              path = inputs.deploy-rs.lib.x86_64-linux.activate.nixos 
+                self.nixosConfigurations.server-x86;
+            };
+          };
+          
+          # ARM server deployment
+          server-arm = {
+            hostname = "server-arm.example.com";  # TODO: Set actual hostname/IP
+            profiles.system = {
+              user = "root";
+              path = inputs.deploy-rs.lib.aarch64-linux.activate.nixos 
+                self.nixosConfigurations.server-arm;
+            };
+          };
+        };
+      };
+
+      # deploy-rs checks (validates deployment configurations)
+      checks = forAllSystems (system:
+        let
+          existingChecks = 
+            let
+              pkgs = nixpkgsFor.${system};
+              isLinux = builtins.elem system [ "x86_64-linux" "aarch64-linux" ];
+              testKeyFile = pkgs.writeText "test-age-key" (builtins.readFile ./keys/test.age);
+              
+              mkTestNode = { extraConfig ? {} }: { config, pkgs, lib, modulesPath, ... }: {
+                imports = [ 
+                  inputs.sops-nix.nixosModules.sops
+                  ./modules/common.nix
+                ];
+                
+                networking.hostName = "server";
+                time.timeZone = "Europe/Berlin";
+                
+                environment.systemPackages = with pkgs; [ vim git ];
+                
+                services.openssh = {
+                  enable = true;
+                  settings.PasswordAuthentication = false;
+                };
+                
+                networking.firewall = {
+                  enable = true;
+                  allowedTCPPorts = [ 22 ];
+                };
+                
+                nix.settings.experimental-features = [ "nix-command" "flakes" ];
+                system.stateVersion = "24.11";
+                
+                boot.loader.grub.enable = false;
+                fileSystems."/" = {
+                  device = "/dev/disk/by-label/nixos";
+                  fsType = "ext4";
+                };
+                
+                security.sudo.wheelNeedsPassword = false;
+                users.users.test = {
+                  isNormalUser = true;
+                  extraGroups = [ "wheel" ];
+                  initialPassword = "test";
+                };
+              } // extraConfig;
+              
+              vmTests = {
+                phase-1-flake = pkgs.nixosTest {
+                  name = "phase-1-basic-flake-${system}";
+                  nodes.server = mkTestNode {
+                    extraConfig = {
+                      sops.defaultSopsFile = ./secrets/test.yaml;
+                      sops.age.keyFile = "/var/lib/sops-nix/key.txt";
+                      sops.age.generateKey = false;
+                      sops.secrets.test_secret = {};
+                      system.activationScripts.sops-install-key = {
+                        text = ''
+                          mkdir -p /var/lib/sops-nix
+                          chmod 700 /var/lib/sops-nix
+                          cp ${testKeyFile} /var/lib/sops-nix/key.txt
+                          chmod 600 /var/lib/sops-nix/key.txt
+                        '';
+                        deps = [ "specialfs" ];
+                      };
+                      system.activationScripts.setupSecrets.deps = [ "sops-install-key" ];
+                    };
+                  };
+                  testScript = ''
+                    server.start()
+                    server.wait_for_unit("multi-user.target")
+                    server.succeed("nixos-version")
+                    server.succeed("systemctl is-system-running --wait || true")
+                    server.wait_for_unit("sshd.service")
+                    server.succeed("systemctl is-active sshd")
+                    server.succeed("systemctl is-active firewall")
+                    print("✅ Phase 1 validation passed on ${system}!")
+                  '';
+                };
+                
+                phase-2-secrets = pkgs.nixosTest {
+                  name = "phase-2-secrets-${system}";
+                  nodes.server = mkTestNode {
+                    extraConfig = {
+                      sops.defaultSopsFile = ./secrets/test.yaml;
+                      sops.age.keyFile = "/var/lib/sops-nix/key.txt";
+                      sops.age.generateKey = false;
+                      sops.secrets.test_secret = {};
+                      system.activationScripts.sops-install-key = {
+                        text = ''
+                          mkdir -p /var/lib/sops-nix
+                          chmod 700 /var/lib/sops-nix
+                          cp ${testKeyFile} /var/lib/sops-nix/key.txt
+                          chmod 600 /var/lib/sops-nix/key.txt
+                        '';
+                        deps = [ "specialfs" ];
+                      };
+                      system.activationScripts.setupSecrets.deps = [ "sops-install-key" ];
+                    };
+                  };
+                  testScript = ''
+                    server.start()
+                    server.wait_for_unit("multi-user.target")
+                    server.succeed("test -f /run/secrets/test_secret")
+                    output = server.succeed("cat /run/secrets/test_secret")
+                    assert "this-is-a-test-secret-value" in output, f"Secret value mismatch: {output}"
+                    server.succeed("stat -c '%a' /run/secrets/test_secret | grep -E '^400$|^600$'")
+                    print("✅ Phase 2 validation passed on ${system}: secrets decrypted successfully!")
+                  '';
+                };
+                
+                phase-3-deploy = pkgs.nixosTest {
+                  name = "phase-3-deploy-${system}";
+                  nodes.server = mkTestNode {
+                    extraConfig = {
+                      sops.defaultSopsFile = ./secrets/test.yaml;
+                      sops.age.keyFile = "/var/lib/sops-nix/key.txt";
+                      sops.age.generateKey = false;
+                      sops.secrets.test_secret = {};
+                      system.activationScripts.sops-install-key = {
+                        text = ''
+                          mkdir -p /var/lib/sops-nix
+                          chmod 700 /var/lib/sops-nix
+                          cp ${testKeyFile} /var/lib/sops-nix/key.txt
+                          chmod 600 /var/lib/sops-nix/key.txt
+                        '';
+                        deps = [ "specialfs" ];
+                      };
+                      system.activationScripts.setupSecrets.deps = [ "sops-install-key" ];
+                    };
+                  };
+                  testScript = ''
+                    server.start()
+                    server.wait_for_unit("multi-user.target")
+                    
+                    # Verify nix is available for deploy-rs
+                    server.succeed("nix --version")
+                    
+                    # Verify SSH is running (required for deploy-rs)
+                    server.wait_for_unit("sshd.service")
+                    server.succeed("systemctl is-active sshd")
+                    
+                    # Verify system profile exists (deploy-rs target)
+                    server.succeed("test -d /nix/var/nix/profiles")
+                    
+                    print("✅ Phase 3 validation passed on ${system}: system ready for deploy-rs!")
+                  '';
+                };
+              };
+            in
+            {
+              flake-check = nixpkgsFor.${system}.runCommand "flake-check" {} ''
+                echo "Flake evaluation successful on ${system}"
+                touch $out
+              '';
+            } // (if builtins.elem system [ "x86_64-linux" "aarch64-linux" ] then vmTests else {});
+          
+          # Add deploy-rs checks for Linux systems
+          deployChecks = 
+            if builtins.elem system [ "x86_64-linux" "aarch64-linux" ]
+            then inputs.deploy-rs.lib.${system}.deployChecks self.deploy
+            else {};
+        in
+        existingChecks // deployChecks
+      );
     };
 }

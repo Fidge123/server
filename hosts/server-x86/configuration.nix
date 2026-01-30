@@ -4,13 +4,20 @@
 {
   imports = [
     ./hardware.nix
+    ./disk-config.nix
+    inputs.disko.nixosModules.disko
     ../../modules/server-common.nix
   ];
 
   # System identification
   networking.hostName = "server-x86";
 
-  # Boot configuration (will be overridden by hardware.nix on real hardware)
-  boot.loader.grub.enable = lib.mkDefault true;
-  boot.loader.grub.device = lib.mkDefault "/dev/sda";
+  # Boot configuration for disko (EFI + BIOS support)
+  # GRUB is installed to the EFI partition defined in disk-config.nix
+  boot.loader.grub = {
+    enable = lib.mkDefault true;
+    efiSupport = lib.mkDefault true;
+    efiInstallAsRemovable = lib.mkDefault true;  # Works without NVRAM support
+    device = lib.mkDefault "nodev";  # Use EFI, not MBR device
+  };
 }

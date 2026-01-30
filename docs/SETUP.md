@@ -49,6 +49,77 @@ nix develop
 
 Use a local VM for testing configuration changes before deploying to production.
 
+### Building Linux on macOS (Required for VM Tests)
+
+NixOS VM tests require building Linux derivations. On macOS, you need a Linux builder.
+
+#### Option 1: nix-darwin linux-builder (Recommended)
+
+If you use [nix-darwin](https://github.com/LnL7/nix-darwin), add the linux-builder:
+
+```nix
+# In your nix-darwin configuration
+{
+  nix.linux-builder = {
+    enable = true;
+    ephemeral = true;
+    maxJobs = 4;
+    config = {
+      virtualisation = {
+        darwin-builder = {
+          diskSize = 40 * 1024;
+          memorySize = 8 * 1024;
+        };
+        cores = 4;
+      };
+    };
+  };
+}
+```
+
+Then rebuild: `darwin-rebuild switch`
+
+#### Option 2: Manual Linux Builder Setup
+
+Without nix-darwin, set up a Linux builder manually:
+
+```bash
+# Start the linux-builder (first time takes a while to build)
+nix run nixpkgs#darwin.linux-builder
+
+# In another terminal, the builder is now available
+# Nix will automatically use it for Linux builds
+```
+
+Add to your Nix configuration (`~/.config/nix/nix.conf`):
+
+```ini
+# Enable building for Linux
+extra-platforms = aarch64-linux
+builders = ssh-ng://linux-builder aarch64-linux /etc/nix/builder_ed25519 4 - - - c3NoLWVkMjU1MTkgQUFBQUMzTnphQzFsWkRJMU5URTVBQUFBSUpCV2N4Yi9CbGFxdDFhdU90RStGOFFVV3JVb3RpQzVxQklRME5mVnhlbGoDnix-daemon
+builders-use-substitutes = true
+```
+
+#### Option 3: OrbStack / Docker (Alternative)
+
+If you use [OrbStack](https://orbstack.dev/) or Docker Desktop with a Linux VM:
+
+```bash
+# Use the Linux VM as a remote builder
+# Add to ~/.config/nix/nix.conf:
+builders = ssh://orb aarch64-linux
+```
+
+#### Verify Linux Builder Works
+
+```bash
+# Test that Linux builds work
+nix build --system aarch64-linux nixpkgs#hello
+
+# If successful, you can now run VM tests
+nix build .#checks.aarch64-linux.phase-3-deploy -L
+```
+
 ### Testing ARM on Apple Silicon Mac
 
 Apple Silicon Macs can natively run aarch64-linux VMs, making them ideal for testing ARM server configurations.
@@ -413,6 +484,38 @@ iptables -L -n
 
 ## Troubleshooting
 
+### Cannot Build Linux Derivations on macOS
+
+If you see errors like:
+
+```
+error: Cannot build '...aarch64-linux...'
+Required system: 'aarch64-linux' with features {}
+Current system: 'aarch64-darwin' with features {...}
+```
+
+You need a Linux builder. See [Building Linux on macOS](#building-linux-on-macos-required-for-vm-tests) above.
+
+**Quick fix with nix-darwin:**
+
+```bash
+# If you have nix-darwin, enable linux-builder and rebuild
+darwin-rebuild switch
+
+# Then retry the build
+nix build .#checks.aarch64-linux.phase-3-deploy -L
+```
+
+**Quick fix without nix-darwin:**
+
+```bash
+# Start the linux-builder in a separate terminal
+nix run nixpkgs#darwin.linux-builder
+
+# In your main terminal, retry the build
+nix build .#checks.aarch64-linux.phase-3-deploy -L
+```
+
 ### Flake Check Fails
 
 ```bash
@@ -658,6 +761,157 @@ deploy .#server
 sops updatekeys secrets/secrets.yaml
 
 # 7. Back up new key, delete old key from password manager
+```
+
+## Deployment
+
+This section covers deploying NixOS configurations to remote servers.
+
+### Deployment Tools
+
+| Tool | Purpose | When to Use |
+|------|---------|-------------|
+| **nixos-anywhere** | Initial installation | First-time setup on a fresh server |
+| **deploy-rs** | Ongoing deployments | Configuration updates after installation |
+| **nixos-rebuild** | Manual deployment | Direct deployment from the server |
+
+### Initial Installation with nixos-anywhere
+
+For first-time installation on a fresh server (see "Remote Server Installation" above for full details):
+
+```bash
+# Install on x86_64 server (Hetzner CX/CPX)
+nix run github:nix-community/nixos-anywhere -- \
+  --flake .#server-x86 \
+  root@YOUR_SERVER_IP
+
+# Install on ARM server (Hetzner CAX)
+nix run github:nix-community/nixos-anywhere -- \
+  --flake .#server-arm \
+  root@YOUR_SERVER_IP
+```
+
+### Ongoing Deployments with deploy-rs
+
+After initial installation, use deploy-rs for configuration updates:
+
+#### Using the Deploy Helper Script
+
+```bash
+# Deploy to x86_64 server
+./scripts/deploy.sh server-x86
+
+# Deploy to ARM server
+./scripts/deploy.sh server-arm
+
+# Check changes without applying (dry-run)
+./scripts/deploy.sh server-x86 --dry-run
+
+# Deploy with verbose output
+./scripts/deploy.sh server-x86 --debug
+
+# Show help
+./scripts/deploy.sh --help
+```
+
+#### Using deploy-rs Directly
+
+```bash
+# Enter the development shell (includes deploy-rs)
+nix develop
+
+# Deploy to a server
+deploy .#server-x86
+deploy .#server-arm
+
+# Dry-run (check without applying)
+deploy --dry-activate .#server-x86
+
+# Deploy with debug logs
+deploy --debug-logs .#server-x86
+
+# Skip confirmation prompt
+deploy --auto-rollback=false .#server-x86
+```
+
+### Configure Server Hostnames
+
+Before deploying, update the server hostnames in `flake.nix`:
+
+```nix
+deploy.nodes = {
+  server-x86 = {
+    hostname = "server-x86.example.com";  # ← Set your actual hostname or IP
+    # ...
+  };
+  
+  server-arm = {
+    hostname = "server-arm.example.com";  # ← Set your actual hostname or IP
+    # ...
+  };
+};
+```
+
+### Deployment Workflow
+
+**Recommended workflow for configuration changes:**
+
+```bash
+# 1. Make changes to your configuration
+vim modules/server-common.nix
+
+# 2. Validate the flake
+nix flake check
+
+# 3. Dry-run to see what will change
+./scripts/deploy.sh server-x86 --dry-run
+
+# 4. Deploy if everything looks good
+./scripts/deploy.sh server-x86
+
+# 5. Verify the deployment
+ssh root@YOUR_SERVER_IP nixos-version
+ssh root@YOUR_SERVER_IP systemctl is-system-running
+```
+
+### Rollback
+
+deploy-rs automatically rolls back if the deployment fails. For manual rollback:
+
+```bash
+# On the server: list available generations
+nix-env --list-generations -p /nix/var/nix/profiles/system
+
+# Roll back to previous generation
+nixos-rebuild switch --rollback
+
+# Or switch to a specific generation
+nix-env --switch-generation 42 -p /nix/var/nix/profiles/system
+/nix/var/nix/profiles/system/bin/switch-to-configuration switch
+```
+
+### Disk Configuration (disko)
+
+This project uses [disko](https://github.com/nix-community/disko) for declarative disk partitioning. Disk configurations are located in:
+
+- `hosts/server-x86/disk-config.nix` - x86_64 server disk layout
+- `hosts/server-arm/disk-config.nix` - ARM server disk layout
+
+**Default disk layouts:**
+
+| Architecture | Boot Type | Partitions |
+|--------------|-----------|------------|
+| x86_64 | BIOS + UEFI | 1MB BIOS boot, 512MB ESP, rest ext4 root |
+| aarch64 | UEFI only | 512MB ESP, rest ext4 root |
+
+**Customizing disk device:**
+
+The default device is `/dev/sda`. Override if your server uses a different disk:
+
+```nix
+# In hosts/server-x86/disk-config.nix (or override in configuration.nix)
+disko.devices.disk.main.device = "/dev/nvme0n1";  # For NVMe
+disko.devices.disk.main.device = "/dev/vda";      # For VirtIO
 ```
 
 ## Next Steps

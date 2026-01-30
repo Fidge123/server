@@ -1,11 +1,12 @@
 # Hardware configuration for x86_64-linux server
 #
 # This file is a placeholder. On a real server, this should be generated using:
-#   nixos-generate-config --show-hardware-config > hardware.nix
+#   nixos-generate-config --show-hardware-config --no-filesystems > hardware.nix
+#
+# Note: Filesystem configuration is managed by disko (see disk-config.nix)
 #
 # For Hetzner/cloud providers, this typically includes:
 # - Boot loader configuration
-# - Disk/filesystem layout
 # - Network interface configuration
 # - Any hardware-specific kernel modules
 
@@ -22,11 +23,9 @@
   boot.kernelModules = [ ];
   boot.extraModulePackages = [ ];
 
-  # Filesystem (placeholder - will be configured per-server)
-  fileSystems."/" = lib.mkDefault {
-    device = "/dev/disk/by-label/nixos";
-    fsType = "ext4";
-  };
+  # Filesystem configuration is managed by disko (see disk-config.nix)
+  # On real hardware, disko will define the proper mount points
+  # For VM testing, the VM module overrides fileSystems
 
   # Swap (optional, configure as needed)
   swapDevices = [ ];
