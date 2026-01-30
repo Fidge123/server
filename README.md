@@ -4,6 +4,13 @@ This repository contains code and instructions to set up a number of self-hosted
 
 Most services will be used by one user or at most 10 users.
 
+## Supported Architectures
+
+| Architecture | Description | Test Environment |
+|--------------|-------------|------------------|
+| **x86_64-linux** | Intel/AMD servers (Hetzner, most VPS) | Linux VM or CI |
+| **aarch64-linux** | ARM servers (Hetzner Ampere, AWS Graviton, Oracle ARM) | Apple Silicon Mac or ARM Linux |
+
 ## Project Status
 
 **Current Phase:** Planning Complete - Awaiting Implementation
@@ -77,16 +84,32 @@ cd self-hosted
 # Validate the NixOS configuration
 nix flake check
 
-# Run VM tests (Linux only)
+# Run VM tests for x86_64 (requires x86_64 Linux or CI)
 nix build .#checks.x86_64-linux.phase-1-flake -L
+
+# Run VM tests for ARM (on Apple Silicon Mac or ARM Linux)
+nix build .#checks.aarch64-linux.phase-1-flake -L
 ```
 
 ### Test in Local VM
 
+#### x86_64 (Intel/AMD)
+
 ```bash
-# Build and run a test VM
-nix build .#nixosConfigurations.server-vm.config.system.build.vm
-./result/bin/run-server-vm
+# Build and run x86_64 test VM
+nix build .#nixosConfigurations.server-x86-vm.config.system.build.vm
+./result/bin/run-server-x86-vm
+
+# SSH into the VM
+ssh -p 2222 test@localhost  # password: test
+```
+
+#### aarch64 (ARM - Apple Silicon Mac)
+
+```bash
+# Build and run ARM test VM (on Apple Silicon Mac)
+nix build .#nixosConfigurations.server-arm-vm.config.system.build.vm
+./result/bin/run-server-arm-vm
 
 # SSH into the VM
 ssh -p 2222 test@localhost  # password: test
@@ -95,8 +118,8 @@ ssh -p 2222 test@localhost  # password: test
 ### Deploy to Production
 
 See [docs/SETUP.md](docs/SETUP.md) for full installation instructions on:
-- Local VM testing
-- Hetzner Cloud servers
+- Local VM testing (x86_64 and ARM)
+- Hetzner Cloud servers (x86_64 and ARM Ampere)
 - Other VPS providers
 
 ```bash

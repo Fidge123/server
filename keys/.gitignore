@@ -1,0 +1,4 @@
+# Ignore all keys except the test key
+*
+!.gitignore
+!test.age

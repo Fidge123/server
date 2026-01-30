@@ -2,6 +2,13 @@
 
 This guide covers installing NixOS on a remote server (Hetzner) and on a local VM for testing.
 
+## Supported Architectures
+
+| Architecture | Server Types | Local Testing |
+|--------------|--------------|---------------|
+| **x86_64-linux** | Hetzner CX/CPX, AWS EC2, DigitalOcean | Linux VM, GitHub Actions |
+| **aarch64-linux** | Hetzner CAX (Ampere), AWS Graviton, Oracle ARM | Apple Silicon Mac, ARM Linux |
+
 ## Prerequisites
 
 ### Local Machine Requirements
@@ -42,18 +49,43 @@ nix develop
 
 Use a local VM for testing configuration changes before deploying to production.
 
-### Option 1: Quick VM with nixos-rebuild (Recommended for Development)
+### Testing ARM on Apple Silicon Mac
+
+Apple Silicon Macs can natively run aarch64-linux VMs, making them ideal for testing ARM server configurations.
+
+#### Quick Start (ARM VM on Mac)
+
+```bash
+# Build the ARM VM
+nix build .#nixosConfigurations.server-arm-vm.config.system.build.vm
+
+# Run the VM
+./result/bin/run-server-arm-vm
+
+# SSH into the VM
+ssh -p 2222 test@localhost  # password: test
+```
+
+#### VM Options for ARM
+
+```bash
+# Run with more memory
+QEMU_OPTS="-m 4096" ./result/bin/run-server-arm-vm
+
+# Run with port forwarding for web services
+QEMU_NET_OPTS="hostfwd=tcp::8080-:80,hostfwd=tcp::2222-:22" ./result/bin/run-server-arm-vm
+```
+
+### Testing x86_64 on Linux
+
+#### Option 1: Quick VM with nixos-rebuild (Recommended for Development)
 
 This creates an ephemeral VM from your configuration:
 
 ```bash
-# Build and run the VM
-nix build .#nixosConfigurations.server-vm.config.system.build.vm
-./result/bin/run-server-vm
-
-# Or in one command (if nixos-rebuild is available on NixOS)
-nixos-rebuild build-vm --flake .#server-vm
-./result/bin/run-server-vm
+# Build and run the x86_64 VM
+nix build .#nixosConfigurations.server-x86-vm.config.system.build.vm
+./result/bin/run-server-x86-vm
 ```
 
 **VM Access:**
@@ -64,10 +96,10 @@ nixos-rebuild build-vm --flake .#server-vm
 
 ```bash
 # Run with more memory
-QEMU_OPTS="-m 4096" ./result/bin/run-server-vm
+QEMU_OPTS="-m 4096" ./result/bin/run-server-x86-vm
 
 # Run with port forwarding for web services
-QEMU_NET_OPTS="hostfwd=tcp::8080-:80,hostfwd=tcp::2222-:22" ./result/bin/run-server-vm
+QEMU_NET_OPTS="hostfwd=tcp::8080-:80,hostfwd=tcp::2222-:22" ./result/bin/run-server-x86-vm
 ```
 
 ### Option 2: Persistent VM with virt-manager
@@ -98,8 +130,11 @@ qemu-system-x86_64 \
 Run the automated NixOS VM tests:
 
 ```bash
-# Run Phase 1 test
+# Run Phase 1 test for x86_64
 nix build .#checks.x86_64-linux.phase-1-flake -L
+
+# Run Phase 1 test for ARM (on Apple Silicon Mac or ARM Linux)
+nix build .#checks.aarch64-linux.phase-1-flake -L
 
 # The test will:
 # - Boot a VM
@@ -124,10 +159,14 @@ nix build .#checks.x86_64-linux.phase-1-flake -L
 3. Add server:
    - **Location:** Choose nearest datacenter
    - **Image:** Ubuntu 24.04 (will be replaced with NixOS)
-   - **Type:** CX22 or larger (4GB RAM minimum recommended)
+   - **Type:** Choose based on architecture:
+     - **x86_64:** CX22 or larger (4GB RAM minimum)
+     - **ARM (aarch64):** CAX11 or larger (Ampere ARM servers)
    - **SSH Key:** Add your public key
-   - **Name:** `server` (or your preferred name)
+   - **Name:** `server-x86` or `server-arm` (or your preferred name)
 4. Note the server IP address
+
+> **Note:** Hetzner CAX (ARM Ampere) servers offer excellent price-performance and are fully supported by this configuration.
 
 #### Step 2: Generate Hardware Configuration
 
@@ -147,15 +186,15 @@ sh <(curl -L https://nixos.org/nix/install) --daemon
 nix-shell -p nixos-install-tools --run "nixos-generate-config --show-hardware-config --no-filesystems"
 ```
 
-Copy the output and update `hosts/server/hardware.nix` with the real hardware configuration.
+Copy the output and update the appropriate `hosts/server-x86/hardware.nix` or `hosts/server-arm/hardware.nix` with the real hardware configuration.
 
 #### Step 3: Configure Disk Layout
 
-Create a disk configuration file for disko:
+Create a disk configuration file for disko (example for x86_64):
 
 ```bash
-# Create hosts/server/disk-config.nix
-cat > hosts/server/disk-config.nix << 'EOF'
+# Create hosts/server-x86/disk-config.nix (or server-arm for ARM)
+cat > hosts/server-x86/disk-config.nix << 'EOF'
 { ... }:
 {
   disko.devices = {
@@ -199,10 +238,16 @@ EOF
 #### Step 4: Install with nixos-anywhere
 
 ```bash
-# From your local machine
+# For x86_64 server
 nix run github:nix-community/nixos-anywhere -- \
-  --flake .#server \
-  --generate-hardware-config nixos-generate-config ./hosts/server/hardware.nix \
+  --flake .#server-x86 \
+  --generate-hardware-config nixos-generate-config ./hosts/server-x86/hardware.nix \
+  root@YOUR_SERVER_IP
+
+# For ARM (aarch64) server
+nix run github:nix-community/nixos-anywhere -- \
+  --flake .#server-arm \
+  --generate-hardware-config nixos-generate-config ./hosts/server-arm/hardware.nix \
   root@YOUR_SERVER_IP
 ```
 
@@ -273,11 +318,11 @@ ssh root@YOUR_SERVER_IP
 git clone https://github.com/YOUR_ORG/self-hosted.git /etc/nixos
 cd /etc/nixos
 
-# Generate hardware config
-nixos-generate-config --show-hardware-config > hosts/server/hardware.nix
+# Generate hardware config (for x86_64 server)
+nixos-generate-config --show-hardware-config > hosts/server-x86/hardware.nix
 
 # Apply configuration
-nixos-rebuild switch --flake .#server
+nixos-rebuild switch --flake .#server-x86
 ```
 
 ### Method 3: Native NixOS Installation
@@ -300,18 +345,31 @@ ssh root@YOUR_SERVER_IP
 git clone https://github.com/YOUR_ORG/self-hosted.git /etc/nixos
 cd /etc/nixos
 
-# Generate hardware configuration
-nixos-generate-config --show-hardware-config > hosts/server/hardware.nix
+# Generate hardware configuration (adjust for your architecture)
+nixos-generate-config --show-hardware-config > hosts/server-x86/hardware.nix
+# Or for ARM: hosts/server-arm/hardware.nix
 
-# Apply configuration
-nixos-rebuild switch --flake .#server
+# Apply configuration (use server-x86 or server-arm)
+nixos-rebuild switch --flake .#server-x86
 ```
 
 ## Post-Installation
 
+### Architecture-Specific Configuration
+
+After installation, apply the appropriate configuration:
+
+```bash
+# For x86_64 servers
+nixos-rebuild switch --flake .#server-x86
+
+# For ARM/aarch64 servers  
+nixos-rebuild switch --flake .#server-arm
+```
+
 ### Add Your SSH Key
 
-Edit `hosts/server/configuration.nix` to add your SSH keys:
+Edit `modules/server-common.nix` to add your SSH keys:
 
 ```nix
 users.users.root.openssh.authorizedKeys.keys = [
@@ -400,7 +458,7 @@ ping YOUR_SERVER_IP
 
 # Try with verbose output
 nix run github:nix-community/nixos-anywhere -- \
-  --flake .#server \
+  --flake .#server-x86 \
   --debug \
   root@YOUR_SERVER_IP
 
@@ -411,13 +469,195 @@ ssh root@YOUR_SERVER_IP lsblk
 ### Configuration Errors
 
 ```bash
-# Test build without switching
-nixos-rebuild build --flake .#server
+# Test build without switching (use server-x86 or server-arm)
+nixos-rebuild build --flake .#server-x86
 
 # Show configuration values
 nix repl
 :lf .
 nixosConfigurations.server.config.services.openssh.enable
+```
+
+## Secrets Management
+
+This section covers setting up and managing secrets with sops-nix. See [ADR-004](adr/004-secrets-management.md) for the design rationale.
+
+### Overview
+
+We use [sops-nix](https://github.com/Mic92/sops-nix) with [age](https://github.com/FiloSottile/age) encryption:
+
+- **Production secrets:** Encrypted with a dedicated age key, stored in `secrets/secrets.yaml`
+- **Test secrets:** Encrypted with a test key (committed to repo), stored in `secrets/test.yaml`
+- **Decrypted secrets:** Available at runtime in `/run/secrets/<secret-name>`
+
+### Generate Production Age Key
+
+> ⚠️ **CRITICAL:** Back up your age key immediately after generation. If lost, encrypted secrets cannot be recovered.
+
+```bash
+# Enter the development shell (includes age and sops)
+nix develop
+
+# Generate a new age key
+age-keygen -o server.age
+
+# Output will show:
+# Public key: age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+**Immediately back up the key:**
+
+1. Copy the entire contents of `server.age` to 1Password (or your password manager)
+2. Store it as a "Secure Note" named "NixOS Server Age Key"
+3. Include the public key in the note for reference
+4. Delete the local `server.age` file after backing up
+
+### Configure Production Key
+
+1. **Add the public key to `.sops.yaml`:**
+
+```yaml
+keys:
+  # Test key for VM testing (committed to repo)
+  - &test age1v9649vqesxhtn6yc5tzhrrjvcc8dp77wmzmhthllk4u77959ke9qrp5pam
+  
+  # Production server - replace with your actual public key
+  - &server age1YOUR_ACTUAL_PUBLIC_KEY_HERE
+
+creation_rules:
+  - path_regex: secrets/test\.yaml$
+    key_groups:
+      - age:
+          - *test
+  
+  - path_regex: secrets/secrets\.yaml$
+    key_groups:
+      - age:
+          - *server
+```
+
+2. **Create production secrets file:**
+
+```bash
+# Create the secrets file (will open in $EDITOR)
+sops secrets/secrets.yaml
+
+# Or encrypt an existing file
+echo 'my_secret: "actual-secret-value"' > /tmp/secrets.yaml
+sops --encrypt --in-place /tmp/secrets.yaml
+mv /tmp/secrets.yaml secrets/secrets.yaml
+```
+
+3. **Add secrets to the module:**
+
+Edit `modules/sops.nix` to declare your secrets:
+
+```nix
+sops.secrets = {
+  database_password = { };
+  api_key = { 
+    owner = "myapp";
+    group = "myapp";
+  };
+};
+```
+
+### Provision Key to Server
+
+During server installation, copy the age key to the server:
+
+```bash
+# Create the sops directory
+ssh root@YOUR_SERVER_IP "mkdir -p /var/lib/sops-nix && chmod 700 /var/lib/sops-nix"
+
+# Copy the key (retrieve from 1Password first)
+# Option 1: From a temporary file
+scp server.age root@YOUR_SERVER_IP:/var/lib/sops-nix/key.txt
+ssh root@YOUR_SERVER_IP "chmod 600 /var/lib/sops-nix/key.txt"
+
+# Option 2: Pipe directly (more secure, no local file)
+pbpaste | ssh root@YOUR_SERVER_IP "cat > /var/lib/sops-nix/key.txt && chmod 600 /var/lib/sops-nix/key.txt"
+```
+
+### Working with Secrets
+
+```bash
+# Enter dev shell (sets SOPS_AGE_KEY_FILE for test secrets)
+nix develop
+
+# Decrypt and view test secrets
+sops secrets/test.yaml
+
+# Edit secrets (opens in $EDITOR)
+sops secrets/test.yaml
+
+# For production secrets, temporarily export your key
+export SOPS_AGE_KEY="AGE-SECRET-KEY-1..."
+sops secrets/secrets.yaml
+
+# Or use a key file
+SOPS_AGE_KEY_FILE=/path/to/server.age sops secrets/secrets.yaml
+```
+
+### Accessing Secrets in NixOS
+
+Secrets are decrypted at boot and available as files:
+
+```nix
+# In your service configuration
+{ config, ... }:
+{
+  # Reference the secret file
+  services.myapp = {
+    passwordFile = config.sops.secrets.database_password.path;
+    # This evaluates to: /run/secrets/database_password
+  };
+  
+  # Or read it in a script
+  systemd.services.myapp = {
+    script = ''
+      export PASSWORD=$(cat ${config.sops.secrets.database_password.path})
+      exec myapp --password-from-env
+    '';
+  };
+}
+```
+
+### Validate Secrets Setup
+
+```bash
+# Run the Phase 2 VM test
+nix build .#checks.x86_64-linux.phase-2-secrets -L
+
+# The test verifies:
+# - sops-nix service starts
+# - Secrets are decrypted to /run/secrets/
+# - File permissions are correct
+```
+
+### Key Rotation
+
+To rotate the production age key:
+
+```bash
+# 1. Generate new key
+age-keygen -o new-server.age
+
+# 2. Add new public key to .sops.yaml (keep old key temporarily)
+
+# 3. Re-encrypt all secrets with both keys
+sops updatekeys secrets/secrets.yaml
+
+# 4. Provision new key to server
+scp new-server.age root@YOUR_SERVER_IP:/var/lib/sops-nix/key.txt
+
+# 5. Deploy to verify new key works
+deploy .#server
+
+# 6. Remove old key from .sops.yaml and re-encrypt
+sops updatekeys secrets/secrets.yaml
+
+# 7. Back up new key, delete old key from password manager
 ```
 
 ## Next Steps
