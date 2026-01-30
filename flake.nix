@@ -139,21 +139,27 @@
 
             nodes.server = mkTestNode {
               extraConfig = {
-                # Provision test key for sops-nix
+                # Provision test key for sops-nix  
                 sops.defaultSopsFile = ./secrets/test.yaml;
                 sops.age.keyFile = "/var/lib/sops-nix/key.txt";
                 sops.age.generateKey = false;
                 
-                # Provision the test key file at activation time
-                system.activationScripts.sops-test-key = {
+                # Define a dummy secret so setupSecrets script exists
+                sops.secrets.test_secret = {};
+                
+                # Provision the test key file before sops-nix runs
+                system.activationScripts.sops-install-key = {
                   text = ''
                     mkdir -p /var/lib/sops-nix
                     chmod 700 /var/lib/sops-nix
                     cp ${testKeyFile} /var/lib/sops-nix/key.txt
                     chmod 600 /var/lib/sops-nix/key.txt
                   '';
-                  deps = [];
+                  deps = [ "specialfs" ];
                 };
+                
+                # Make setupSecrets depend on our key installation
+                system.activationScripts.setupSecrets.deps = [ "sops-install-key" ];
               };
             };
 
@@ -191,16 +197,20 @@
                 
                 sops.secrets.test_secret = {};
                 
-                # Provision the test key file at build time (before sops-nix runs)
-                system.activationScripts.sops-test-key = {
+                # Provision the test key file before sops-nix runs
+                # The key must exist before setupSecrets activation script
+                system.activationScripts.sops-install-key = {
                   text = ''
                     mkdir -p /var/lib/sops-nix
                     chmod 700 /var/lib/sops-nix
                     cp ${testKeyFile} /var/lib/sops-nix/key.txt
                     chmod 600 /var/lib/sops-nix/key.txt
                   '';
-                  deps = [];
+                  deps = [ "specialfs" ];
                 };
+                
+                # Make setupSecrets depend on our key installation
+                system.activationScripts.setupSecrets.deps = [ "sops-install-key" ];
               };
             };
 
