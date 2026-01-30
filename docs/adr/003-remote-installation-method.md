@@ -35,8 +35,14 @@ We need to install NixOS on remote servers (primarily Hetzner Cloud) that typica
 
 **Command**:
 ```bash
+# For x86_64 server
 nix run github:nix-community/nixos-anywhere -- \
-  --flake .#server \
+  --flake .#server-x86 \
+  root@YOUR_SERVER_IP
+
+# For ARM server
+nix run github:nix-community/nixos-anywhere -- \
+  --flake .#server-arm \
   root@YOUR_SERVER_IP
 ```
 
@@ -163,7 +169,7 @@ Add disko to the flake for nixos-anywhere:
 inputs.disko.url = "github:nix-community/disko";
 inputs.disko.inputs.nixpkgs.follows = "nixpkgs";
 
-# hosts/server/configuration.nix
+# hosts/server-x86/configuration.nix (or server-arm)
 imports = [
   inputs.disko.nixosModules.disko
   ./disk-config.nix
@@ -173,7 +179,7 @@ imports = [
 ### Disk Configuration Template
 
 ```nix
-# hosts/server/disk-config.nix
+# hosts/server-x86/disk-config.nix (or server-arm)
 { ... }:
 {
   disko.devices = {
@@ -210,10 +216,16 @@ imports = [
 ### Installation Command
 
 ```bash
-# From local machine with flake
+# From local machine with flake (x86_64 example)
 nix run github:nix-community/nixos-anywhere -- \
-  --flake .#server \
-  --generate-hardware-config nixos-generate-config ./hosts/server/hardware.nix \
+  --flake .#server-x86 \
+  --generate-hardware-config nixos-generate-config ./hosts/server-x86/hardware.nix \
+  root@YOUR_SERVER_IP
+
+# For ARM servers
+nix run github:nix-community/nixos-anywhere -- \
+  --flake .#server-arm \
+  --generate-hardware-config nixos-generate-config ./hosts/server-arm/hardware.nix \
   root@YOUR_SERVER_IP
 ```
 

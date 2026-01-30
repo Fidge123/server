@@ -1,10 +1,10 @@
-# Hardware configuration for server
+# Hardware configuration for aarch64-linux (ARM) server
 #
 # This file is a placeholder. On a real server, this should be generated using:
 #   nixos-generate-config --show-hardware-config > hardware.nix
 #
-# For Hetzner/cloud providers, this typically includes:
-# - Boot loader configuration
+# For ARM cloud providers (Hetzner Ampere, AWS Graviton, Oracle ARM), this typically includes:
+# - UEFI boot loader configuration
 # - Disk/filesystem layout
 # - Network interface configuration
 # - Any hardware-specific kernel modules
@@ -16,8 +16,8 @@
     (modulesPath + "/profiles/qemu-guest.nix")
   ];
 
-  # Boot configuration for QEMU/cloud VMs
-  boot.initrd.availableKernelModules = [ "ata_piix" "uhci_hcd" "virtio_pci" "virtio_scsi" "sd_mod" "sr_mod" ];
+  # Boot configuration for QEMU/cloud VMs on ARM
+  boot.initrd.availableKernelModules = [ "virtio_pci" "virtio_scsi" "virtio_blk" "virtio_net" "sd_mod" ];
   boot.initrd.kernelModules = [ ];
   boot.kernelModules = [ ];
   boot.extraModulePackages = [ ];
@@ -28,6 +28,12 @@
     fsType = "ext4";
   };
 
+  # EFI System Partition (required for UEFI boot on ARM)
+  fileSystems."/boot" = lib.mkDefault {
+    device = "/dev/disk/by-label/boot";
+    fsType = "vfat";
+  };
+
   # Swap (optional, configure as needed)
   swapDevices = [ ];
 
@@ -35,5 +41,5 @@
   networking.useDHCP = lib.mkDefault true;
 
   # Platform
-  nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
+  nixpkgs.hostPlatform = lib.mkDefault "aarch64-linux";
 }

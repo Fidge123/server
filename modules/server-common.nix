@@ -1,23 +1,16 @@
-# Main server configuration
+# Shared server configuration for both x86_64 and aarch64
+# This module contains all common settings used by both architectures
 { config, pkgs, lib, inputs, self, ... }:
 
 {
   imports = [
-    ./hardware.nix
-    ../../modules/common.nix
-    ../../modules/sops.nix
+    ./common.nix
+    ./sops.nix
     # Future service imports:
     # ./services/postgres.nix
     # ./services/nginx.nix
     # ./services/authentik.nix
   ];
-
-  # System identification
-  networking.hostName = "server";
-
-  # Boot configuration (will be overridden by hardware.nix on real hardware)
-  boot.loader.grub.enable = lib.mkDefault true;
-  boot.loader.grub.device = lib.mkDefault "/dev/sda";
 
   # Timezone and locale
   time.timeZone = "Europe/Berlin";

@@ -19,11 +19,21 @@
   - Backups work (where applicable)
   - Secrets are available (where applicable)
 
+## Multi-Architecture Support
+
+- Support both x86_64-linux and aarch64-linux (ARM)
+- Test ARM configurations locally on Apple Silicon Mac using `server-arm-vm`
+- Test x86_64 configurations on Linux or in CI
+- Architecture-specific configurations:
+  - `hosts/server-x86/` - x86_64-linux server configuration
+  - `hosts/server-arm/` - aarch64-linux server configuration
+  - `modules/server-common.nix` - Shared configuration for both architectures
+
 ## NixOS-Specific Guidelines
 
 - Use Flakes for reproducibility
 - Pin all dependencies in `flake.lock`
-- Organize configuration by service in `hosts/server/services/`
+- Organize configuration by service in `hosts/server-*/services/`
 - Use NixOS modules in `modules/` for reusable configuration
 - Encrypt secrets with sops-nix; never commit plaintext secrets
 

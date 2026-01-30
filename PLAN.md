@@ -16,6 +16,7 @@ This plan implements the NixOS-based self-hosted infrastructure as defined in [A
 |-------|-------------|--------|
 | 1 | NixOS Flake Structure | ✅ Complete |
 | 2 | Secrets (sops-nix) | ✅ Complete |
+| 2.5 | Multi-Architecture Support (x86_64 + aarch64) | ✅ Complete |
 | 3 | Deployment (deploy-rs) | ⏳ Not Started |
 | 4 | PostgreSQL + pgBackRest | ⏳ Not Started |
 | 5 | Restic Backup | ⏳ Not Started |
@@ -29,12 +30,12 @@ This plan implements the NixOS-based self-hosted infrastructure as defined in [A
 ### Completed Tasks
 
 - [x] Created `flake.nix` with basic structure
-- [x] Created `hosts/server/configuration.nix` with minimal config
-- [x] Created `hosts/server/hardware.nix` placeholder
+- [x] Created architecture-specific configurations (x86_64 + aarch64)
 - [x] Created `modules/common.nix` for shared configuration
+- [x] Created `modules/server-common.nix` for shared server settings
 - [x] Set up `.gitignore` for Nix artifacts
 - [x] Created test framework in `tests/lib.nix`
-- [x] Added VM test in flake checks
+- [x] Added VM test in flake checks for both architectures
 
 ### Files Created
 
@@ -43,7 +44,10 @@ This plan implements the NixOS-based self-hosted infrastructure as defined in [A
 ├── flake.lock             # Pinned dependencies
 ├── .gitignore             # Ignore build artifacts
 ├── hosts/
-│   └── server/
+│   ├── server-x86/        # x86_64-linux server
+│   │   ├── configuration.nix
+│   │   └── hardware.nix
+│   └── server-arm/        # aarch64-linux server
 │       ├── configuration.nix
 │       └── hardware.nix
 ├── modules/
@@ -112,6 +116,58 @@ SOPS_AGE_KEY_FILE=keys/test.age sops -d secrets/test.yaml
 nix build .#checks.x86_64-linux.phase-2-secrets -L
 ```
 
+## Phase 2.5: Multi-Architecture Support ✅
+
+**Status:** Complete (January 30, 2026)
+
+### Objective
+
+Support both x86_64-linux and aarch64-linux servers, with the ability to test ARM configurations locally on Apple Silicon Macs.
+
+### Completed Tasks
+
+- [x] Separate hardware configurations for x86_64 and aarch64
+- [x] Create architecture-specific NixOS configurations in flake.nix
+- [x] Add aarch64-linux VM configurations for local testing on ARM Macs
+- [x] Enable VM tests for aarch64-linux architecture
+- [x] Update documentation (README.md, SETUP.md)
+
+### Architecture
+
+```
+hosts/
+├── server-x86/           # x86_64-linux server
+│   ├── configuration.nix
+│   └── hardware.nix
+└── server-arm/           # aarch64-linux server
+    ├── configuration.nix
+    └── hardware.nix
+modules/
+└── server-common.nix     # Shared server configuration
+```
+
+### Local Testing on ARM Mac
+
+```bash
+# Build and run ARM VM on Apple Silicon Mac
+nix build .#nixosConfigurations.server-arm-vm.config.system.build.vm
+./result/bin/run-server-arm-vm
+
+# SSH into the VM
+ssh -p 2222 test@localhost  # password: test
+```
+
+### Validation
+
+```bash
+# Run aarch64-linux checks (on ARM Mac or ARM Linux)
+nix build .#checks.aarch64-linux.phase-1-flake -L
+nix build .#checks.aarch64-linux.phase-2-secrets -L
+
+# Run x86_64-linux checks (requires x86 Linux or cross-compilation)
+nix build .#checks.x86_64-linux.phase-1-flake -L
+```
+
 ## Phase 3: Remote Deployment with deploy-rs
 
 **Status:** Not Started
@@ -140,7 +196,7 @@ deploy --dry-activate .#server
 
 ### Tasks
 
-- [ ] **4.1** Create `hosts/server/services/postgres.nix`
+- [ ] **4.1** Create `modules/services/postgres.nix`
 - [ ] **4.2** Configure PostgreSQL service
 - [ ] **4.3** Configure pgBackRest for local backups
 - [ ] **4.4** Set up backup schedule
