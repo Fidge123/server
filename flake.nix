@@ -132,24 +132,32 @@
           '';
         } // (if system == "x86_64-linux" then {
           # VM tests only on x86_64-linux
-          phase-1-flake = pkgs.nixosTest {
+          phase-1-flake = let
+            testKeyFile = pkgs.writeText "test-age-key" (builtins.readFile ./keys/test.age);
+          in pkgs.nixosTest {
             name = "phase-1-basic-flake";
 
             nodes.server = mkTestNode {
               extraConfig = {
-                # Disable sops for phase-1 (minimal test)
+                # Provision test key for sops-nix
                 sops.defaultSopsFile = ./secrets/test.yaml;
-                sops.age.keyFile = "/tmp/test-age-key.txt";
+                sops.age.keyFile = "/var/lib/sops-nix/key.txt";
+                sops.age.generateKey = false;
+                
+                # Provision the test key file at activation time
+                system.activationScripts.sops-test-key = {
+                  text = ''
+                    mkdir -p /var/lib/sops-nix
+                    chmod 700 /var/lib/sops-nix
+                    cp ${testKeyFile} /var/lib/sops-nix/key.txt
+                    chmod 600 /var/lib/sops-nix/key.txt
+                  '';
+                  deps = [];
+                };
               };
             };
 
-            testScript = let
-              testKeyFile = pkgs.writeText "test-age-key" (builtins.readFile ./keys/test.age);
-            in ''
-              # Set up the test age key
-              server.succeed("mkdir -p /tmp")
-              server.copy_from_host("${testKeyFile}", "/tmp/test-age-key.txt")
-              
+            testScript = ''
               server.start()
               server.wait_for_unit("multi-user.target")
               
@@ -169,7 +177,9 @@
           };
           
           # Phase 2: Secrets management with sops-nix
-          phase-2-secrets = pkgs.nixosTest {
+          phase-2-secrets = let
+            testKeyFile = pkgs.writeText "test-age-key" (builtins.readFile ./keys/test.age);
+          in pkgs.nixosTest {
             name = "phase-2-secrets";
 
             nodes.server = mkTestNode {
@@ -181,26 +191,25 @@
                 
                 sops.secrets.test_secret = {};
                 
-                # Ensure the sops key directory exists
-                systemd.tmpfiles.rules = [
-                  "d /var/lib/sops-nix 0700 root root -"
-                ];
+                # Provision the test key file at build time (before sops-nix runs)
+                system.activationScripts.sops-test-key = {
+                  text = ''
+                    mkdir -p /var/lib/sops-nix
+                    chmod 700 /var/lib/sops-nix
+                    cp ${testKeyFile} /var/lib/sops-nix/key.txt
+                    chmod 600 /var/lib/sops-nix/key.txt
+                  '';
+                  deps = [];
+                };
               };
             };
 
-            testScript = let
-              testKeyFile = pkgs.writeText "test-age-key" (builtins.readFile ./keys/test.age);
-            in ''
-              # Set up the test age key before starting
-              server.succeed("mkdir -p /var/lib/sops-nix && chmod 700 /var/lib/sops-nix")
-              server.copy_from_host("${testKeyFile}", "/var/lib/sops-nix/key.txt")
-              server.succeed("chmod 600 /var/lib/sops-nix/key.txt")
-              
+            testScript = ''
               server.start()
               server.wait_for_unit("multi-user.target")
               
-              # Wait for sops-nix to decrypt secrets
-              server.wait_for_unit("sops-nix.service")
+              # Verify sops-nix ran successfully (it runs during activation)
+              # The service may not exist as a unit if secrets were set up during activation
               
               # Verify the test secret was decrypted
               server.succeed("test -f /run/secrets/test_secret")
