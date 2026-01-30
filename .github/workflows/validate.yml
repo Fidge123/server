@@ -44,7 +44,7 @@ jobs:
 
   build-arm:
     name: Build aarch64 Configuration
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     needs: check
     steps:
       - name: Checkout repository
@@ -90,7 +90,7 @@ jobs:
 
   vm-test-arm:
     name: VM Tests (aarch64)
-    runs-on: ubuntu-24.04-arm
+    runs-on: macos-latest
     needs: check
     steps:
       - name: Checkout repository
