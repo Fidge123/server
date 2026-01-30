@@ -15,11 +15,11 @@ This plan implements the NixOS-based self-hosted infrastructure as defined in [A
 | Phase | Description | Status |
 |-------|-------------|--------|
 | 1 | NixOS Flake Structure | ✅ Complete |
-| 2 | Secrets (sops-nix) | ⏳ Not Started |
+| 2 | Secrets (sops-nix) | ✅ Complete |
 | 3 | Deployment (deploy-rs) | ⏳ Not Started |
 | 4 | PostgreSQL + pgBackRest | ⏳ Not Started |
 | 5 | Restic Backup | ⏳ Not Started |
-| 6 | Documentation | 🔄 Partial (SETUP.md done) |
+| 6 | Documentation | 🔄 Partial (SETUP.md updated) |
 | 7 | GitHub Actions | 🔄 Partial (validate.yml done) |
 
 ## Phase 1: NixOS Flake Structure ✅
@@ -66,25 +66,47 @@ nix --extra-experimental-features 'nix-command flakes' eval .#nixosConfiguration
 nix build .#checks.x86_64-linux.phase-1-flake -L
 ```
 
-## Phase 2: Secrets Management with sops-nix
+## Phase 2: Secrets Management with sops-nix ✅
 
-**Status:** Not Started
+**Status:** Complete (January 29, 2026)
 
-### Tasks
+### Completed Tasks
 
-- [ ] **2.1** Add sops-nix to flake inputs
-- [ ] **2.2** Generate age key for secrets encryption
-- [ ] **2.3** Create `.sops.yaml` configuration
-- [ ] **2.4** Create `secrets/secrets.yaml` with test secret
-- [ ] **2.5** Create `modules/secrets.nix` to configure sops-nix
-- [ ] **2.6** Integrate secrets into server configuration
-- [ ] **2.7** Document key backup procedure (1Password)
+- [x] **2.1** Add sops-nix to flake inputs
+- [x] **2.2** Create test age key for VM testing (`keys/test.age`)
+- [x] **2.3** Create `.sops.yaml` configuration
+- [x] **2.4** Create `secrets/test.yaml` with test secret
+- [x] **2.5** Create `modules/sops.nix` to configure sops-nix
+- [x] **2.6** Integrate secrets into server configuration
+- [x] **2.7** Document key generation and backup procedure
+- [x] **2.8** Create ADR-004 for secrets management strategy
+
+### Files Created
+
+```
+├── .sops.yaml                 # SOPS configuration
+├── keys/
+│   ├── .gitignore             # Ignore prod keys, keep test key
+│   └── test.age               # Test age key (committed)
+├── secrets/
+│   └── test.yaml              # Encrypted test secrets
+├── modules/
+│   └── sops.nix               # sops-nix module
+└── docs/adr/
+    └── 004-secrets-management.md  # ADR for key strategy
+```
+
+### Key Management
+
+- **Test key:** Committed to repo (`keys/test.age`) - only encrypts test secrets
+- **Production key:** Generated manually, backed up to 1Password
+- See [docs/SETUP.md#secrets-management](docs/SETUP.md#secrets-management) for procedures
 
 ### Validation
 
 ```bash
-# Verify secrets can be decrypted
-sops -d secrets/secrets.yaml
+# Verify test secrets can be decrypted
+SOPS_AGE_KEY_FILE=keys/test.age sops -d secrets/test.yaml
 
 # Run VM test
 nix build .#checks.x86_64-linux.phase-2-secrets -L

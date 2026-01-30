@@ -1,0 +1,23 @@
+# SOPS Configuration
+# See: https://github.com/getsops/sops#using-sops-yaml-conf-to-select-kms-pgp-for-new-files
+
+keys:
+  # Test key for VM testing (committed to repo - see keys/test.age)
+  - &test age1v9649vqesxhtn6yc5tzhrrjvcc8dp77wmzmhthllk4u77959ke9qrp5pam
+  
+  # Production server key
+  - &server age153hkm5hlvgx2r4azveltskd0ttrcvfrg0fat2llm5a2f2accyasq3z3d40
+
+creation_rules:
+  # Test secrets - encrypted with test key only
+  # Safe for CI/CD and VM testing
+  - path_regex: secrets/test\.yaml$
+    key_groups:
+      - age:
+          - *test
+  
+  # Production secrets - encrypted with production key
+  - path_regex: secrets/secrets\.yaml$
+    key_groups:
+      - age:
+          - *server

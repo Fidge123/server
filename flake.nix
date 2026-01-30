@@ -4,10 +4,11 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
 
-    # For future phases
-    # sops-nix.url = "github:Mic92/sops-nix";
-    # sops-nix.inputs.nixpkgs.follows = "nixpkgs";
+    # Secrets management
+    sops-nix.url = "github:Mic92/sops-nix";
+    sops-nix.inputs.nixpkgs.follows = "nixpkgs";
     
+    # For future phases
     # deploy-rs.url = "github:serokell/deploy-rs";
     # deploy-rs.inputs.nixpkgs.follows = "nixpkgs";
   };
@@ -80,6 +81,48 @@
       checks = forAllSystems (system:
         let
           pkgs = nixpkgsFor.${system};
+          
+          # Common test node configuration that includes sops-nix
+          mkTestNode = { extraConfig ? {} }: { config, pkgs, lib, modulesPath, ... }: {
+            imports = [ 
+              inputs.sops-nix.nixosModules.sops
+              ./modules/common.nix
+            ];
+            
+            # Basic server configuration (subset of hosts/server/configuration.nix)
+            networking.hostName = "server";
+            time.timeZone = "Europe/Berlin";
+            
+            environment.systemPackages = with pkgs; [ vim git ];
+            
+            services.openssh = {
+              enable = true;
+              settings.PasswordAuthentication = false;
+            };
+            
+            networking.firewall = {
+              enable = true;
+              allowedTCPPorts = [ 22 ];
+            };
+            
+            nix.settings.experimental-features = [ "nix-command" "flakes" ];
+            system.stateVersion = "24.11";
+            
+            # VM-specific overrides for testing
+            boot.loader.grub.enable = false;
+            fileSystems."/" = {
+              device = "/dev/disk/by-label/nixos";
+              fsType = "ext4";
+            };
+            
+            # Test user with passwordless sudo
+            security.sudo.wheelNeedsPassword = false;
+            users.users.test = {
+              isNormalUser = true;
+              extraGroups = [ "wheel" ];
+              initialPassword = "test";
+            };
+          } // extraConfig;
         in
         {
           # Basic flake evaluation check
@@ -92,29 +135,20 @@
           phase-1-flake = pkgs.nixosTest {
             name = "phase-1-basic-flake";
 
-            nodes.server = { config, pkgs, lib, modulesPath, ... }: {
-              imports = [ 
-                ./hosts/server/configuration.nix
-                self.nixosModules.common
-              ];
-              
-              # VM-specific overrides for testing
-              boot.loader.grub.enable = false;
-              fileSystems."/" = {
-                device = "/dev/disk/by-label/nixos";
-                fsType = "ext4";
-              };
-              
-              # Test user with passwordless sudo
-              security.sudo.wheelNeedsPassword = false;
-              users.users.test = {
-                isNormalUser = true;
-                extraGroups = [ "wheel" ];
-                initialPassword = "test";
+            nodes.server = mkTestNode {
+              extraConfig = {
+                # Disable sops for phase-1 (minimal test)
+                sops.defaultSopsFile = ./secrets/test.yaml;
+                sops.age.keyFile = "/tmp/test-age-key.txt";
               };
             };
 
-            testScript = ''
+            testScript = let
+              testKey = builtins.readFile ./keys/test.age;
+            in ''
+              # Set up the test age key
+              server.succeed("mkdir -p /tmp && cat > /tmp/test-age-key.txt << 'AGEKEY'\n${testKey}AGEKEY")
+              
               server.start()
               server.wait_for_unit("multi-user.target")
               
@@ -132,6 +166,52 @@
               print("✅ Phase 1 validation passed!")
             '';
           };
+          
+          # Phase 2: Secrets management with sops-nix
+          phase-2-secrets = pkgs.nixosTest {
+            name = "phase-2-secrets";
+
+            nodes.server = mkTestNode {
+              extraConfig = {
+                # Use test secrets and test key
+                sops.defaultSopsFile = ./secrets/test.yaml;
+                sops.age.keyFile = "/var/lib/sops-nix/key.txt";
+                sops.age.generateKey = false;
+                
+                sops.secrets.test_secret = {};
+                
+                # Ensure the sops key directory exists
+                systemd.tmpfiles.rules = [
+                  "d /var/lib/sops-nix 0700 root root -"
+                ];
+              };
+            };
+
+            testScript = let
+              testKey = builtins.readFile ./keys/test.age;
+            in ''
+              # Set up the test age key before starting
+              server.succeed("mkdir -p /var/lib/sops-nix && chmod 700 /var/lib/sops-nix")
+              server.succeed("cat > /var/lib/sops-nix/key.txt << 'AGEKEY'\n${testKey}AGEKEY")
+              server.succeed("chmod 600 /var/lib/sops-nix/key.txt")
+              
+              server.start()
+              server.wait_for_unit("multi-user.target")
+              
+              # Wait for sops-nix to decrypt secrets
+              server.wait_for_unit("sops-nix.service")
+              
+              # Verify the test secret was decrypted
+              server.succeed("test -f /run/secrets/test_secret")
+              output = server.succeed("cat /run/secrets/test_secret")
+              assert "this-is-a-test-secret-value" in output, f"Secret value mismatch: {output}"
+              
+              # Verify secret file permissions (should be readable only by root)
+              server.succeed("stat -c '%a' /run/secrets/test_secret | grep -E '^400$|^600$'")
+              
+              print("✅ Phase 2 validation passed: secrets decrypted successfully!")
+            '';
+          };
         } else {})
       );
 
@@ -145,8 +225,15 @@
             buildInputs = with pkgs; [
               nixpkgs-fmt
               nil  # Nix LSP
-              # Future: sops, age, deploy-rs
+              sops
+              age
+              # Future: deploy-rs
             ];
+            
+            # Set up sops to use the test key by default
+            shellHook = ''
+              export SOPS_AGE_KEY_FILE="$PWD/keys/test.age"
+            '';
           };
         }
       );

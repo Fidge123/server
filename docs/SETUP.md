@@ -420,6 +420,188 @@ nix repl
 nixosConfigurations.server.config.services.openssh.enable
 ```
 
+## Secrets Management
+
+This section covers setting up and managing secrets with sops-nix. See [ADR-004](adr/004-secrets-management.md) for the design rationale.
+
+### Overview
+
+We use [sops-nix](https://github.com/Mic92/sops-nix) with [age](https://github.com/FiloSottile/age) encryption:
+
+- **Production secrets:** Encrypted with a dedicated age key, stored in `secrets/secrets.yaml`
+- **Test secrets:** Encrypted with a test key (committed to repo), stored in `secrets/test.yaml`
+- **Decrypted secrets:** Available at runtime in `/run/secrets/<secret-name>`
+
+### Generate Production Age Key
+
+> ⚠️ **CRITICAL:** Back up your age key immediately after generation. If lost, encrypted secrets cannot be recovered.
+
+```bash
+# Enter the development shell (includes age and sops)
+nix develop
+
+# Generate a new age key
+age-keygen -o server.age
+
+# Output will show:
+# Public key: age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+**Immediately back up the key:**
+
+1. Copy the entire contents of `server.age` to 1Password (or your password manager)
+2. Store it as a "Secure Note" named "NixOS Server Age Key"
+3. Include the public key in the note for reference
+4. Delete the local `server.age` file after backing up
+
+### Configure Production Key
+
+1. **Add the public key to `.sops.yaml`:**
+
+```yaml
+keys:
+  # Test key for VM testing (committed to repo)
+  - &test age1v9649vqesxhtn6yc5tzhrrjvcc8dp77wmzmhthllk4u77959ke9qrp5pam
+  
+  # Production server - replace with your actual public key
+  - &server age1YOUR_ACTUAL_PUBLIC_KEY_HERE
+
+creation_rules:
+  - path_regex: secrets/test\.yaml$
+    key_groups:
+      - age:
+          - *test
+  
+  - path_regex: secrets/secrets\.yaml$
+    key_groups:
+      - age:
+          - *server
+```
+
+2. **Create production secrets file:**
+
+```bash
+# Create the secrets file (will open in $EDITOR)
+sops secrets/secrets.yaml
+
+# Or encrypt an existing file
+echo 'my_secret: "actual-secret-value"' > /tmp/secrets.yaml
+sops --encrypt --in-place /tmp/secrets.yaml
+mv /tmp/secrets.yaml secrets/secrets.yaml
+```
+
+3. **Add secrets to the module:**
+
+Edit `modules/sops.nix` to declare your secrets:
+
+```nix
+sops.secrets = {
+  database_password = { };
+  api_key = { 
+    owner = "myapp";
+    group = "myapp";
+  };
+};
+```
+
+### Provision Key to Server
+
+During server installation, copy the age key to the server:
+
+```bash
+# Create the sops directory
+ssh root@YOUR_SERVER_IP "mkdir -p /var/lib/sops-nix && chmod 700 /var/lib/sops-nix"
+
+# Copy the key (retrieve from 1Password first)
+# Option 1: From a temporary file
+scp server.age root@YOUR_SERVER_IP:/var/lib/sops-nix/key.txt
+ssh root@YOUR_SERVER_IP "chmod 600 /var/lib/sops-nix/key.txt"
+
+# Option 2: Pipe directly (more secure, no local file)
+pbpaste | ssh root@YOUR_SERVER_IP "cat > /var/lib/sops-nix/key.txt && chmod 600 /var/lib/sops-nix/key.txt"
+```
+
+### Working with Secrets
+
+```bash
+# Enter dev shell (sets SOPS_AGE_KEY_FILE for test secrets)
+nix develop
+
+# Decrypt and view test secrets
+sops secrets/test.yaml
+
+# Edit secrets (opens in $EDITOR)
+sops secrets/test.yaml
+
+# For production secrets, temporarily export your key
+export SOPS_AGE_KEY="AGE-SECRET-KEY-1..."
+sops secrets/secrets.yaml
+
+# Or use a key file
+SOPS_AGE_KEY_FILE=/path/to/server.age sops secrets/secrets.yaml
+```
+
+### Accessing Secrets in NixOS
+
+Secrets are decrypted at boot and available as files:
+
+```nix
+# In your service configuration
+{ config, ... }:
+{
+  # Reference the secret file
+  services.myapp = {
+    passwordFile = config.sops.secrets.database_password.path;
+    # This evaluates to: /run/secrets/database_password
+  };
+  
+  # Or read it in a script
+  systemd.services.myapp = {
+    script = ''
+      export PASSWORD=$(cat ${config.sops.secrets.database_password.path})
+      exec myapp --password-from-env
+    '';
+  };
+}
+```
+
+### Validate Secrets Setup
+
+```bash
+# Run the Phase 2 VM test
+nix build .#checks.x86_64-linux.phase-2-secrets -L
+
+# The test verifies:
+# - sops-nix service starts
+# - Secrets are decrypted to /run/secrets/
+# - File permissions are correct
+```
+
+### Key Rotation
+
+To rotate the production age key:
+
+```bash
+# 1. Generate new key
+age-keygen -o new-server.age
+
+# 2. Add new public key to .sops.yaml (keep old key temporarily)
+
+# 3. Re-encrypt all secrets with both keys
+sops updatekeys secrets/secrets.yaml
+
+# 4. Provision new key to server
+scp new-server.age root@YOUR_SERVER_IP:/var/lib/sops-nix/key.txt
+
+# 5. Deploy to verify new key works
+deploy .#server
+
+# 6. Remove old key from .sops.yaml and re-encrypt
+sops updatekeys secrets/secrets.yaml
+
+# 7. Back up new key, delete old key from password manager
+```
+
 ## Next Steps
 
 After successful installation:

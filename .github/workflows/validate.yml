@@ -65,3 +65,6 @@ jobs:
 
       - name: Run Phase 1 VM test
         run: nix build .#checks.x86_64-linux.phase-1-flake -L
+
+      - name: Run Phase 2 VM test
+        run: nix build .#checks.x86_64-linux.phase-2-flake -L
