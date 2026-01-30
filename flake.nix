@@ -144,10 +144,11 @@
             };
 
             testScript = let
-              testKey = builtins.readFile ./keys/test.age;
+              testKeyFile = pkgs.writeText "test-age-key" (builtins.readFile ./keys/test.age);
             in ''
               # Set up the test age key
-              server.succeed("mkdir -p /tmp && cat > /tmp/test-age-key.txt << 'AGEKEY'\n${testKey}AGEKEY")
+              server.succeed("mkdir -p /tmp")
+              server.copy_from_host("${testKeyFile}", "/tmp/test-age-key.txt")
               
               server.start()
               server.wait_for_unit("multi-user.target")
@@ -188,11 +189,11 @@
             };
 
             testScript = let
-              testKey = builtins.readFile ./keys/test.age;
+              testKeyFile = pkgs.writeText "test-age-key" (builtins.readFile ./keys/test.age);
             in ''
               # Set up the test age key before starting
               server.succeed("mkdir -p /var/lib/sops-nix && chmod 700 /var/lib/sops-nix")
-              server.succeed("cat > /var/lib/sops-nix/key.txt << 'AGEKEY'\n${testKey}AGEKEY")
+              server.copy_from_host("${testKeyFile}", "/var/lib/sops-nix/key.txt")
               server.succeed("chmod 600 /var/lib/sops-nix/key.txt")
               
               server.start()
