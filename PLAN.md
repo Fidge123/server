@@ -17,7 +17,7 @@ This plan implements the NixOS-based self-hosted infrastructure as defined in [A
 | 1 | NixOS Flake Structure | ✅ Complete |
 | 2 | Secrets (sops-nix) | ✅ Complete |
 | 2.5 | Multi-Architecture Support (x86_64 + aarch64) | ✅ Complete |
-| 3 | Deployment (deploy-rs) | ⏳ Not Started |
+| 3 | Initial Installation (nixos-anywhere + disko) | ⏳ Not Started |
 | 4 | PostgreSQL + pgBackRest | ⏳ Not Started |
 | 5 | Restic Backup | ⏳ Not Started |
 | 6 | Documentation | 🔄 Partial (SETUP.md updated) |
@@ -168,26 +168,36 @@ nix build .#checks.aarch64-linux.phase-2-secrets -L
 nix build .#checks.x86_64-linux.phase-1-flake -L
 ```
 
-## Phase 3: Remote Deployment with deploy-rs
+## Phase 3: Initial Server Installation with nixos-anywhere + disko
 
 **Status:** Not Started
 
+### Objective
+
+Enable reproducible, automated installation of NixOS on a fresh remote server. Once complete, a new server can be provisioned with a single command.
+
 ### Tasks
 
-- [ ] **3.1** Add deploy-rs to flake inputs
-- [ ] **3.2** Configure deploy-rs in flake.nix
-- [ ] **3.3** Create deployment profile for server
-- [ ] **3.4** Create `scripts/deploy.sh` helper script
-- [ ] **3.5** Document deployment process
+- [ ] **3.1** Add disko to flake inputs
+- [ ] **3.2** Create `hosts/server-x86/disk-config.nix` for x86_64 servers
+- [ ] **3.3** Create `hosts/server-arm/disk-config.nix` for ARM servers
+- [ ] **3.4** Update host configurations to import disko module and disk config
+- [ ] **3.5** Document installation process in `docs/SETUP.md`
 
 ### Validation
 
 ```bash
-# Check deployment configuration
+# Verify flake evaluates correctly with disko
 nix flake check
 
-# Dry-run deployment
-deploy --dry-activate .#server
+# Build production configurations (validates disko config)
+nix build .#nixosConfigurations.server-x86.config.system.build.toplevel --dry-run
+nix build .#nixosConfigurations.server-arm.config.system.build.toplevel --dry-run
+
+# Initial server installation (requires a fresh server with SSH access)
+nix run github:nix-community/nixos-anywhere -- \
+  --flake .#server-x86 \
+  root@YOUR_SERVER_IP
 ```
 
 ## Phase 4: PostgreSQL with pgBackRest
@@ -280,18 +290,41 @@ restic -r /var/backup/restic snapshots
 - [x] **6.6** Create troubleshooting guide (in SETUP.md)
 - [x] **6.7** Update README.md
 
-## Phase 7: GitHub Actions for GitOps
+## Phase 7: GitHub Actions for GitOps + deploy-rs
 
 **Status:** Partial
+
+### Objective
+
+Automate deployments: merging to main triggers a configuration update pushed to the server with automatic rollback if the system becomes unreachable.
 
 ### Tasks
 
 - [x] **7.1** Create validation workflow (`.github/workflows/validate.yml`)
 - [x] **7.2** Create VM test workflow (included in validate.yml)
-- [ ] **7.3** Create deployment workflow
-- [ ] **7.4** Set up Cachix for build caching
-- [ ] **7.5** Configure deployment secrets
-- [ ] **7.6** Add deployment protection rules
+- [ ] **7.3** Add deploy-rs to flake inputs
+- [ ] **7.4** Configure deploy-rs deployment nodes in `flake.nix`
+- [ ] **7.5** Create deployment workflow (`.github/workflows/deploy.yml`)
+- [ ] **7.6** Set up Cachix for build caching
+- [ ] **7.7** Configure deployment secrets (SSH key for deploy-rs)
+- [ ] **7.8** Add deployment protection rules (require passing checks)
+
+### deploy-rs Configuration
+
+```nix
+# In flake.nix
+inputs.deploy-rs.url = "github:serokell/deploy-rs";
+inputs.deploy-rs.inputs.nixpkgs.follows = "nixpkgs";
+
+deploy.nodes.server-x86 = {
+  hostname = "YOUR_SERVER_IP";
+  profiles.system = {
+    user = "root";
+    path = inputs.deploy-rs.lib.x86_64-linux.activate.nixos
+      self.nixosConfigurations.server-x86;
+  };
+};
+```
 
 ### Current Workflow
 
@@ -299,10 +332,10 @@ restic -r /var/backup/restic snapshots
 Push/PR → Flake Check → Build Config → Run VM Tests
 ```
 
-### Remaining Work
+### Target Workflow (Phase 7)
 
 ```
-(Future) Merge to main → Deploy to server
+Merge to main → Run VM Tests → Deploy via deploy-rs (auto-rollback on failure)
 ```
 
 ## Timeline

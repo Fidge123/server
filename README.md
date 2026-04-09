@@ -23,7 +23,8 @@ See [PLAN.md](PLAN.md) for the detailed implementation plan and [ADR-001](docs/a
 |-----------|------------|
 | **Operating System** | NixOS with Flakes |
 | **Secrets Management** | sops-nix with age encryption |
-| **Deployment** | deploy-rs |
+| **Initial Installation** | nixos-anywhere + disko |
+| **Ongoing Deployment** | deploy-rs (Phase 7) |
 | **Database Backup** | pgBackRest |
 | **Data Backup** | Restic (optional multi-destination) |
 | **CI/CD** | GitHub Actions |
@@ -122,9 +123,18 @@ See [docs/SETUP.md](docs/SETUP.md) for full installation instructions on:
 - Hetzner Cloud servers (x86_64 and ARM Ampere)
 - Other VPS providers
 
+#### Initial Installation (nixos-anywhere)
+
 ```bash
-# After initial server setup (Phase 3)
-deploy .#server
+# Install NixOS on a fresh x86_64 server
+nix run github:nix-community/nixos-anywhere -- \
+  --flake .#server-x86 \
+  root@YOUR_SERVER_IP
+
+# Install NixOS on a fresh ARM server
+nix run github:nix-community/nixos-anywhere -- \
+  --flake .#server-arm \
+  root@YOUR_SERVER_IP
 ```
 
 ## Backup Strategy

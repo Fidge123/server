@@ -7,30 +7,30 @@
     # Secrets management
     sops-nix.url = "github:Mic92/sops-nix";
     sops-nix.inputs.nixpkgs.follows = "nixpkgs";
-    
-    # For future phases
-    # deploy-rs.url = "github:serokell/deploy-rs";
-    # deploy-rs.inputs.nixpkgs.follows = "nixpkgs";
+
+    # Declarative disk partitioning (used by nixos-anywhere for initial installation)
+    disko.url = "github:nix-community/disko";
+    disko.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = { self, nixpkgs, ... }@inputs:
     let
       # Systems to support for building/testing
       supportedSystems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" "x86_64-darwin" ];
-      
+
       # Helper to generate attributes for each system
       forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
-      
+
       # Nixpkgs instantiated for each system
       nixpkgsFor = forAllSystems (system: import nixpkgs {
         inherit system;
         config.allowUnfree = true;
       });
-      
+
       # VM module for testing - shared between architectures
-      vmModule = { config, pkgs, modulesPath, ... }: {
+      vmModule = { config, pkgs, lib, modulesPath, ... }: {
         imports = [ (modulesPath + "/virtualisation/qemu-vm.nix") ];
-        
+
         # VM settings
         virtualisation = {
           memorySize = 2048;
@@ -40,10 +40,17 @@
             { from = "host"; host.port = 2222; guest.port = 22; }
           ];
         };
-        
+
+        # Production configs use disko for disk layout; VMs use a simple disk image instead
+        disko.enableConfig = lib.mkForce false;
+        fileSystems."/" = lib.mkForce {
+          device = "/dev/disk/by-label/nixos";
+          fsType = "ext4";
+        };
+
         # Allow passwordless sudo for testing
         security.sudo.wheelNeedsPassword = false;
-        
+
         # Test user
         users.users.test = {
           isNormalUser = true;
@@ -281,7 +288,6 @@
               nil  # Nix LSP
               sops
               age
-              # Future: deploy-rs
             ];
             
             # Set up sops to use the test key by default
