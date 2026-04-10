@@ -1,11 +1,12 @@
 # Hardware configuration for aarch64-linux (ARM) server
 #
 # This file is a placeholder. On a real server, this should be generated using:
-#   nixos-generate-config --show-hardware-config > hardware.nix
+#   nixos-generate-config --show-hardware-config --no-filesystems > hardware.nix
+#
+# Note: Filesystem configuration is managed by disko (see disk-config.nix)
 #
 # For ARM cloud providers (Hetzner Ampere, AWS Graviton, Oracle ARM), this typically includes:
 # - UEFI boot loader configuration
-# - Disk/filesystem layout
 # - Network interface configuration
 # - Any hardware-specific kernel modules
 
@@ -22,17 +23,9 @@
   boot.kernelModules = [ ];
   boot.extraModulePackages = [ ];
 
-  # Filesystem (placeholder - will be configured per-server)
-  fileSystems."/" = lib.mkDefault {
-    device = "/dev/disk/by-label/nixos";
-    fsType = "ext4";
-  };
-
-  # EFI System Partition (required for UEFI boot on ARM)
-  fileSystems."/boot" = lib.mkDefault {
-    device = "/dev/disk/by-label/boot";
-    fsType = "vfat";
-  };
+  # Filesystem configuration is managed by disko (see disk-config.nix)
+  # On real hardware, disko will define the proper mount points
+  # For VM testing, the VM module overrides fileSystems
 
   # Swap (optional, configure as needed)
   swapDevices = [ ];
