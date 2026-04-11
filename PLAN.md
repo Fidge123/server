@@ -19,7 +19,7 @@ This plan implements the NixOS-based self-hosted infrastructure as defined in [A
 | 2 | Secrets (sops-nix) | ✅ Complete |
 | 2.5 | Multi-Architecture Support (x86_64 + aarch64) | ✅ Complete |
 | 3 | Initial Installation (nixos-anywhere + disko) | ✅ Complete |
-| 3.5 | GitOps CI + deploy-rs | 🔄 Partial (validate.yml done) |
+| 3.5 | GitOps CI + deploy-rs | ✅ Complete |
 | 4 | Reverse Proxy + TLS (nginx + ACME) | ⏳ Not Started |
 | 5 | PostgreSQL (shared instance) | ⏳ Not Started |
 | 6 | Authentik (SSO) | ⏳ Not Started |
@@ -225,12 +225,12 @@ Moving CI/CD here (before Phase 4+) means every subsequent service phase benefit
 
 - [x] **3.5.1** Create validation workflow (`.github/workflows/validate.yml`)
 - [x] **3.5.2** VM test workflow (included in validate.yml)
-- [ ] **3.5.3** Add deploy-rs to flake inputs
-- [ ] **3.5.4** Configure deploy-rs deployment nodes in `flake.nix`
-- [ ] **3.5.5** Create deployment workflow (`.github/workflows/deploy.yml`)
-- [ ] **3.5.6** Set up Cachix for build caching
-- [ ] **3.5.7** Configure deployment secrets (SSH key for deploy-rs in GitHub Actions)
-- [ ] **3.5.8** Add deployment protection rules (require passing checks before deploy)
+- [x] **3.5.3** Add deploy-rs to flake inputs
+- [x] **3.5.4** Configure deploy-rs deployment nodes in `flake.nix`
+- [x] **3.5.5** Create deployment workflow (`.github/workflows/deploy.yml`)
+- [x] **3.5.6** Set up Cachix for build caching
+- [x] **3.5.7** Configure deployment secrets (SSH key for deploy-rs in GitHub Actions)
+- [x] **3.5.8** Add deployment protection rules (require passing checks before deploy)
 
 ### deploy-rs Configuration
 

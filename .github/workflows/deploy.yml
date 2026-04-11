@@ -1,0 +1,77 @@
+name: Deploy NixOS Configuration
+
+# Triggered automatically after validate.yml passes on main.
+# Can also be triggered manually for emergency deployments.
+on:
+  workflow_run:
+    workflows: ["Validate NixOS Configuration"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Deployment target"
+        required: true
+        default: "server-x86"
+        type: choice
+        options:
+          - server-x86
+          - server-arm
+          - all
+
+jobs:
+  deploy-x86:
+    name: Deploy x86_64 Server
+    runs-on: ubuntu-latest
+    # Only deploy when validation passed (or on manual trigger)
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    # Use a GitHub Environment for production deployment protection rules.
+    # Configure required reviewers or wait timers in:
+    # Repository Settings → Environments → production
+    environment: production
+    concurrency:
+      group: deploy-server-x86
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v15
+        with:
+          name: fidge123-server
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # Start ssh-agent and add key so deploy-rs can use it
+          eval $(ssh-agent -s)
+          ssh-add ~/.ssh/id_ed25519
+          echo "SSH_AUTH_SOCK=${SSH_AUTH_SOCK}" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=${SSH_AGENT_PID}" >> "$GITHUB_ENV"
+
+      - name: Add server to known hosts
+        run: |
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST_X86 }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy to x86_64 server
+        run: nix run github:serokell/deploy-rs -- .#server-x86
+
+      - name: Verify deployment
+        run: |
+          ssh -o StrictHostKeyChecking=yes root@"${{ secrets.DEPLOY_HOST_X86 }}" \
+            'nixos-version && systemctl is-system-running --wait'

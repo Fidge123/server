@@ -911,13 +911,101 @@ disko.devices.disk.main.device = "/dev/nvme0n1";  # For NVMe
 disko.devices.disk.main.device = "/dev/vda";      # For VirtIO
 ```
 
+## CI/CD Setup (Phase 3.5)
+
+After provisioning your server, configure GitHub Actions for automated deployments.
+
+### Overview
+
+The GitOps workflow is:
+```
+Push to main → validate.yml (flake check + VM tests) → deploy.yml (deploy-rs → auto-rollback)
+```
+
+### Required GitHub Secrets
+
+Go to **Repository Settings → Secrets and variables → Actions** and add:
+
+| Secret | Description |
+|--------|-------------|
+| `CACHIX_AUTH_TOKEN` | Cachix auth token for build caching |
+| `DEPLOY_SSH_KEY` | Private SSH key used by deploy-rs to connect to servers |
+| `DEPLOY_HOST_X86` | Hostname or IP of the x86_64 server |
+
+#### 1. Generate a deploy SSH key
+
+```bash
+# Generate a dedicated deploy key (no passphrase — CI needs non-interactive access)
+ssh-keygen -t ed25519 -C "github-actions-deploy" -f deploy_key -N ""
+
+# Add the public key to your server's authorized_keys
+ssh root@YOUR_SERVER_IP "cat >> ~/.ssh/authorized_keys" < deploy_key.pub
+
+# Add the private key to GitHub Actions secret DEPLOY_SSH_KEY
+cat deploy_key
+
+# Delete local copies — the private key lives only in GitHub Secrets
+rm deploy_key deploy_key.pub
+```
+
+#### 2. Set up Cachix
+
+```bash
+# 1. Create an account at https://app.cachix.org
+# 2. Create a cache named "fidge123-server" (matches validate.yml + deploy.yml)
+# 3. Generate an auth token: https://app.cachix.org/personal-auth-tokens
+# 4. Add the token as GitHub secret CACHIX_AUTH_TOKEN
+```
+
+### Set Server Hostname in flake.nix
+
+Update the placeholder hostnames before deploying:
+
+```nix
+# flake.nix — deploy section
+deploy.nodes.server-x86 = {
+  hostname = "YOUR_ACTUAL_IP_OR_HOSTNAME";  # ← update this
+  ...
+};
+```
+
+### Configure Branch Protection Rules (3.5.8)
+
+Require CI to pass before any merge to main:
+
+1. Go to **Repository Settings → Branches → Add branch ruleset**
+2. Target: `main`
+3. Enable **Require status checks to pass** and add:
+   - `Flake Check`
+   - `Build x86_64 Configuration`
+   - `VM Tests (x86_64)`
+4. Enable **Require branches to be up to date before merging**
+
+### Configure Deployment Environment Protection (optional)
+
+Require manual approval before production deployments:
+
+1. Go to **Repository Settings → Environments → production**
+2. Enable **Required reviewers** and add yourself
+3. Optionally set a **Wait timer** (e.g. 5 minutes) after validation
+
+### Validate the CI/CD Pipeline
+
+```bash
+# Trigger a test deployment manually (after setting secrets and hostname)
+gh workflow run deploy.yml -f target=server-x86
+
+# Or push a change to main and watch the pipeline
+git push origin main
+```
+
 ## Next Steps
 
 After successful installation:
 
 1. **Phase 2:** Set up secrets with sops-nix
-2. **Phase 3:** Configure deploy-rs for remote deployments
-3. **Phase 4:** Set up PostgreSQL with pgBackRest
-4. **Phase 5:** Configure Restic backups
+2. **Phase 3.5:** Configure GitHub secrets and branch protection (see above)
+3. **Phase 4:** Reverse proxy + TLS (nginx + ACME)
+4. **Phase 5:** PostgreSQL shared instance
 
 See [PLAN.md](../PLAN.md) for the full implementation plan.

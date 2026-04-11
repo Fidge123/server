@@ -11,6 +11,10 @@
     # Declarative disk partitioning (used by nixos-anywhere for initial installation)
     disko.url = "github:nix-community/disko";
     disko.inputs.nixpkgs.follows = "nixpkgs";
+
+    # Atomic deployments with auto-rollback
+    deploy-rs.url = "github:serokell/deploy-rs";
+    deploy-rs.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = { self, nixpkgs, ... }@inputs:
@@ -267,14 +271,44 @@
             };
           };
         in
+        let
+          # deploy-rs schema validation (Linux only)
+          deployChecks = if isLinux
+            then inputs.deploy-rs.lib.${system}.deployChecks self.deploy
+            else {};
+        in
         {
           # Basic flake evaluation check (works on all systems including macOS)
           flake-check = pkgs.runCommand "flake-check" {} ''
             echo "Flake evaluation successful on ${system}"
             touch $out
           '';
-        } // (if isLinux then vmTests else {})
+        } // (if isLinux then vmTests else {}) // deployChecks
       );
+
+      # deploy-rs deployment configuration
+      # Update hostnames below after provisioning your servers (Phase 3)
+      deploy = {
+        nodes.server-x86 = {
+          hostname = "YOUR_SERVER_X86_IP";
+          fastConnection = true;
+          profiles.system = {
+            user = "root";
+            path = inputs.deploy-rs.lib.x86_64-linux.activate.nixos
+              self.nixosConfigurations.server-x86;
+          };
+        };
+
+        nodes.server-arm = {
+          hostname = "YOUR_SERVER_ARM_IP";
+          fastConnection = true;
+          profiles.system = {
+            user = "root";
+            path = inputs.deploy-rs.lib.aarch64-linux.activate.nixos
+              self.nixosConfigurations.server-arm;
+          };
+        };
+      };
 
       # Development shells
       devShells = forAllSystems (system:
@@ -288,6 +322,7 @@
               nil  # Nix LSP
               sops
               age
+              inputs.deploy-rs.packages.${system}.deploy-rs
             ];
             
             # Set up sops to use the test key by default
