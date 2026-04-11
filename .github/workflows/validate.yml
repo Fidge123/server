@@ -21,8 +21,14 @@ jobs:
             experimental-features = nix-command flakes
             accept-flake-config = true
 
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v14
+        with:
+          name: fidge123-server
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+
       - name: Check flake
-        run: nix flake check --all-systems
+        run: nix flake check
 
   build-x86:
     name: Build x86_64 Configuration
@@ -38,6 +44,12 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
             accept-flake-config = true
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v14
+        with:
+          name: fidge123-server
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
       - name: Build server-x86 configuration
         run: nix build .#nixosConfigurations.server-x86.config.system.build.toplevel --dry-run
@@ -58,6 +70,12 @@ jobs:
             accept-flake-config = true
             extra-platforms = aarch64-linux
 
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v14
+        with:
+          name: fidge123-server
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+
       - name: Build server-arm configuration
         run: nix build .#nixosConfigurations.server-arm.config.system.build.toplevel --dry-run
 
@@ -75,6 +93,12 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
             accept-flake-config = true
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v14
+        with:
+          name: fidge123-server
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
       - name: Free disk space
         run: |
