@@ -47,7 +47,7 @@ jobs:
             accept-flake-config = true
 
       - name: Setup Cachix
-        uses: cachix/cachix-action@v15
+        uses: cachix/cachix-action@v14
         with:
           name: fidge123-server
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'

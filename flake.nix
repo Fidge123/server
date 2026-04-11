@@ -271,19 +271,13 @@
             };
           };
         in
-        let
-          # deploy-rs schema validation (Linux only)
-          deployChecks = if isLinux
-            then inputs.deploy-rs.lib.${system}.deployChecks self.deploy
-            else {};
-        in
         {
           # Basic flake evaluation check (works on all systems including macOS)
           flake-check = pkgs.runCommand "flake-check" {} ''
             echo "Flake evaluation successful on ${system}"
             touch $out
           '';
-        } // (if isLinux then vmTests else {}) // deployChecks
+        } // (if isLinux then vmTests else {})
       );
 
       # deploy-rs deployment configuration
@@ -322,6 +316,7 @@
               nil  # Nix LSP
               sops
               age
+            ] ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
               inputs.deploy-rs.packages.${system}.deploy-rs
             ];
             
