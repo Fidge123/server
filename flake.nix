@@ -11,6 +11,10 @@
     # Declarative disk partitioning (used by nixos-anywhere for initial installation)
     disko.url = "github:nix-community/disko";
     disko.inputs.nixpkgs.follows = "nixpkgs";
+
+    # Atomic deployments with auto-rollback
+    deploy-rs.url = "github:serokell/deploy-rs";
+    deploy-rs.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = { self, nixpkgs, ... }@inputs:
@@ -276,6 +280,30 @@
         } // (if isLinux then vmTests else {})
       );
 
+      # deploy-rs deployment configuration
+      # Update hostnames below after provisioning your servers (Phase 3)
+      deploy = {
+        nodes.server-x86 = {
+          hostname = "YOUR_SERVER_X86_IP";
+          fastConnection = true;
+          profiles.system = {
+            user = "root";
+            path = inputs.deploy-rs.lib.x86_64-linux.activate.nixos
+              self.nixosConfigurations.server-x86;
+          };
+        };
+
+        nodes.server-arm = {
+          hostname = "YOUR_SERVER_ARM_IP";
+          fastConnection = true;
+          profiles.system = {
+            user = "root";
+            path = inputs.deploy-rs.lib.aarch64-linux.activate.nixos
+              self.nixosConfigurations.server-arm;
+          };
+        };
+      };
+
       # Development shells
       devShells = forAllSystems (system:
         let
@@ -288,6 +316,8 @@
               nil  # Nix LSP
               sops
               age
+            ] ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+              inputs.deploy-rs.packages.${system}.deploy-rs
             ];
             
             # Set up sops to use the test key by default
