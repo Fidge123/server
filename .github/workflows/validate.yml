@@ -23,6 +23,8 @@ jobs:
 
       - name: Setup Cachix
         uses: cachix/cachix-action@v14
+        # Non-blocking: CI works without Cachix; the cache speeds things up once created
+        continue-on-error: true
         with:
           name: fidge123-server
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
@@ -47,6 +49,7 @@ jobs:
 
       - name: Setup Cachix
         uses: cachix/cachix-action@v14
+        continue-on-error: true
         with:
           name: fidge123-server
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
@@ -72,6 +75,7 @@ jobs:
 
       - name: Setup Cachix
         uses: cachix/cachix-action@v14
+        continue-on-error: true
         with:
           name: fidge123-server
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
@@ -96,6 +100,7 @@ jobs:
 
       - name: Setup Cachix
         uses: cachix/cachix-action@v14
+        continue-on-error: true
         with:
           name: fidge123-server
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
